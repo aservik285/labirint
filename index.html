@@ -9,6 +9,7 @@
     --bg:#11151c; --panel:#171e28; --line:#232d3b; --ink:#e8edf5; --dim:#8c9cb3;
     --unknown:#141a23; --known:#1e2733; --here:#2d4260; --accent:#4da3ff;
     --wall:#9db2cf; --door:#e0a44a; --dooropen:#5fbf7a;
+    --built:#b07d4a; --builts:#7e868f; --builtd:#6ee7a8;
     --grass:
       repeating-linear-gradient(66deg, rgba(126,176,96,.17) 0 1px, transparent 1px 5px),
       repeating-linear-gradient(-58deg, rgba(104,152,82,.13) 0 1px, transparent 1px 7px),
@@ -59,6 +60,8 @@
   .cell.t-exit{background:#1f3d2b}
   .cell.t-spawn{background-color:#2b2a1d}
   .cell.t-tree{background-color:#1a2a18;background-image:var(--grass)}
+  .cell.t-hay{background-color:#262a17;background-image:var(--grass)}
+  .cell.t-flax{background-color:#1c2a26;background-image:var(--grass)}
   .cell.t-rock{background-color:#2a2e33}
   /* движущаяся стена занимает клетку целиком, кирпичом — поверх любого ландшафта */
   .cell.mover{background-color:#8a5340;background-image:var(--bricks);background-size:21px 14px}
@@ -103,6 +106,15 @@
   .d-r{border-right-color:var(--door);border-right-style:dashed}
   .d-b{border-bottom-color:var(--door);border-bottom-style:dashed}
   .d-l{border-left-color:var(--door);border-left-style:dashed}
+  /* стены, поставленные игроком: деревянная и каменная */
+  .bw-t{border-top-color:var(--built)}   .bw-r{border-right-color:var(--built)}
+  .bw-b{border-bottom-color:var(--built)}.bw-l{border-left-color:var(--built)}
+  .bs-t{border-top-color:var(--builts)}   .bs-r{border-right-color:var(--builts)}
+  .bs-b{border-bottom-color:var(--builts)}.bs-l{border-left-color:var(--builts)}
+  .bd-t{border-top-color:var(--builtd);border-top-style:double}
+  .bd-r{border-right-color:var(--builtd);border-right-style:double}
+  .bd-b{border-bottom-color:var(--builtd);border-bottom-style:double}
+  .bd-l{border-left-color:var(--builtd);border-left-style:double}
   .o-t{border-top-color:var(--dooropen);border-top-style:dotted}
   .o-r{border-right-color:var(--dooropen);border-right-style:dotted}
   .o-b{border-bottom-color:var(--dooropen);border-bottom-style:dotted}
@@ -118,6 +130,7 @@
       margin-right:2px;vertical-align:-2px}
   .hb.on{background:#e0a44a}
   .hb.low{background:#e05a4a}
+  .hb.hp{background:#d9455a}
   .bag{margin-top:10px;color:var(--dim);min-height:22px}
   .bag b{color:var(--ink);font-weight:500}
   .hum{margin-top:10px;padding:7px 10px;border-radius:8px;background:#1d2634;color:var(--dim)}
@@ -189,6 +202,8 @@
     <div class="row">
       <button class="main" id="start">Начать игру</button>
       <button id="surv">🌲 Выживание</button>
+      <button id="survon" hidden>▶ Продолжить выживание</button>
+      <button id="survload">📂 Загрузить выживание</button>
       <button id="netopen">📱 С разных устройств</button>
       <button id="toedit">Собрать поле в редакторе</button>
       <button id="loadmap">Загрузить карту</button>
@@ -229,15 +244,27 @@
       <p>Цель — встать на клетку с вертолётом 🚁. Он слышен за несколько клеток, но направление
          не выдаёт. Подзорная труба 🔭 работает один раз и открывает любые четыре клетки карты;
          изредка валяется на поле, а в магазине 🏪 есть всегда.</p>
+      <p>Там же, за 6 монет, продаётся <b>каменная кирка</b>: ею можно <b>проломить
+         стену</b> — любую, какую вы уже нашли, уткнувшись в неё. Пролом стоит хода,
+         открывает вид на клетку за стеной и оставляет в рюкзаке камень. Кирка
+         не ломается, так что с ней лабиринт проходится напролом, если хватит ходов.
+         Запертые двери киркой не берутся — для них по-прежнему нужен ключ.</p>
+      <p><b>Здоровье</b> ❤️ — три сердца. Любая рана (шипы, зверь, движущаяся стена, голод,
+         затянувшееся сидение в яме) снимает одно сердце, но игрок остаётся на той же клетке
+         и ничего не теряет: ни рюкзак, ни монеты. И только когда сердец не осталось, рана
+         убивает по-настоящему — рюкзак падает на землю, игрок возвращается в точку
+         возрождения 🔁 с полным здоровьем, и в лабиринте при этом сгорает жизнь.
+         Залечить сердце можно едой, но лишь на полный желудок: когда все полоски голода
+         целы, съеденное идёт не в живот, а в здоровье.</p>
       <p>Ходы: стрелки или WASD, либо кнопки на панели. Яма 🕳 держит, пока не найдётся
-         лестница или сосед; не выбрались за три хода — минус жизнь.
-         Шипы 🔺 — минус жизнь, но через уже открытые шипы можно
+         лестница или сосед; не выбрались за три хода — минус сердце и ещё три хода на подъём.
+         Шипы 🔺 — минус сердце, но через уже открытые шипы можно
          перекинуть лестницу, и она останется там мостиком. Вода проходится только на плоту 🛶,
          и плот остаётся на воде. Дверь открывается ключом 🔑.</p>
       <p>Голод: каждые пятнадцать ходов уходит одна полоска 🥩. Пропуск хода голод не тратит —
          можно отсидеться. Полоску возвращает стейк: он валяется на поле или стоит 1 монету
-         в магазине, съесть его — отдельное действие. Кончились полоски — минус жизнь,
-         и возрождаешься сытым.</p>
+         в магазине, съесть его — отдельное действие. Кончились полоски — минус сердце,
+         и полоски возвращаются полными.</p>
       <p>Рыба 🐟 стоит двух полосок, но её не купить — только поймать. Нужен спиннинг 🎣
          (2 монеты в магазине, изредка лежит на поле) и плот: ловят, стоя прямо на воде.
          Кнопка «Ловить рыбу» тратит ход, шанс поклёвки ведущий задаёт в настройках,
@@ -250,26 +277,82 @@
          сбросит и ускачет, дальше приманивайте заново.</p>
       <p><b>Выживание</b> — отдельная кнопка на этом экране. Бесконечный лес во все стороны,
          ни стен, ни дверей, ни вертолёта. Из ландшафта только деревья 🌳, камни и озёра;
-         ни ям, ни шипов, ни лавок. Предметов на земле нет совсем — ни еды, ни снастей,
-         ни монет. Тумана войны тоже нет: в открытом лесу видно всё вокруг.</p>
-      <p>Дерево можно <b>срубить</b>: встаньте рядом, и на панели появится «🪓 Срубить дерево»
-         для каждой соседней стороны. Уходит ход, зато клетка становится обычной землёй
-         и больше никого не держит — так пробивают дорогу сквозь чащу. С каждого срубленного
-         дерева в рюкзак падают <b>палка</b> и <b>доска</b>.</p>
+         ни ям, ни шипов, ни лавок. Растут ещё луговины и лён. Предметов на земле нет
+         совсем — ни еды, ни снастей, ни монет. Тумана войны тоже нет: в открытом лесу
+         видно всё вокруг.</p>
+      <p><b>Луговина</b> и <b>лён</b> собираются кнопкой, как рубится дерево, — и рядом,
+         и под собой, без всякого инструмента. С луговины выходит охапка <b>сена</b>,
+         со льна — <b>лён</b>. Клетка после сбора становится обычной землёй, но лес
+         понемногу зарастает заново: вместе с деревьями поднимаются трава и лён.</p>
+      <p>Через <b>деревья можно проходить</b>: между стволами пролезают и люди, и звери,
+         дорогу перекрывает только камень. Дерево можно <b>срубить</b> — кнопка
+         «🪓 Срубить дерево» появляется и для каждой соседней стороны, и для того дерева,
+         под которым стоите сами. Уходит ход, клетка становится обычной землёй,
+         а в рюкзак падают <b>палка</b> и <b>доска</b>.</p>
       <p>Из них на <b>верстаке</b> («🛠 Верстак» на панели, появляется, как только есть дерево)
-         собирается три вещи. <b>Деревянная кирка</b> — 2 палки и 3 доски: ею разбивают камни,
-         и с каждого разбитого камня в рюкзак идёт <b>камень</b>. <b>Деревянный меч</b> —
-         1 палка и 2 доски. <b>Каменный меч</b> — 1 палка и 2 камня.</p>
+         собирается двенадцать вещей. <b>Деревянная кирка</b> — 2 палки и 3 доски: ею разбивают камни,
+         и с каждого разбитого камня в рюкзак идёт <b>камень</b>. <b>Каменная кирка</b> —
+         2 палки и 3 камня: умеет всё то же, разбирает поставленные стены и проламывает
+         стены самого лабиринта — из пролома в рюкзак падает камень.
+         <b>Деревянный меч</b> — 1 палка и 2 доски. <b>Каменный меч</b> — 1 палка и 2 камня.</p>
+      <p><b>Стены можно ставить самому.</b> Деревянная стена — 5 досок, каменная — 5 камней.
+         Стена встаёт не в клетку, а <b>на грань между клетками</b>, как стена лабиринта:
+         выбираете сторону своей клетки, и там появляется перегородка — клетки по обе
+         стороны остаются целыми, ходить по ним можно, а вот сквозь грань уже нет.
+         Четыре стены вокруг себя — и вы в своей каморке. Сквозь стену не пройти
+         ни игроку, ни зверю, и —
+         главное — <b>за стеной волк и акула вас не чуют</b>: они бродят, будто никого нет.
+         Но каждый ход у зверя есть 10 % учуять добычу сквозь доски. Учуял — подходит
+         и грызёт: деревянную прогрызает за 10 ходов, а каменную не берёт вовсе,
+         только топчется рядом. Разобрать стену обратно может лишь каменная кирка,
+         и возвращает она две доски или два камня из пяти.</p>
+      <p><b>Дверь</b> — 3 доски и 2 камня, ставится на грань так же, как стена.
+         Вы через неё ходите свободно, а зверь — нет: ни волк, ни акула её не открывают
+         и не ломают, сколько бы ни нюхали. Четыре стены и дверь — и у вас настоящая
+         изба, из которой можно выйти, а к вам никто не войдёт. Лошадь дверь тоже
+         не открывает, так что внутрь её не заведёшь.</p>
+      <p><b>Кровать</b> — переносная точка возрождения. Собирается в три приёма:
+         1 лён даёт <b>2 нитки</b>, 4 нитки — <b>ткань</b>, а 2 ткани и 2 сена — кровать.
+         Поставьте её на свободную клетку (свою или соседнюю), встаньте сверху
+         и нажмите «Спать» — и дальше после смерти будете возвращаться сюда, а не
+         на первую поляну. Ходить по кровати можно, никому она не мешает, и в любой
+         момент её можно свернуть обратно в рюкзак и унести на новое место.</p>
+      <p><b>Поводок</b> — 2 нитки и 1 лён. Подойдите к любому живому: волку, акуле,
+         козе или лошади, — и нажмите «Привязать». Поводок остаётся на животном,
+         а оно с этого хода ходит следом за вами и встаёт рядом. Привязанный зверь
+         никого не трогает: ни хозяина, ни чужих. Кнопка «Отвязать» возвращает поводок
+         в рюкзак, и животное снова живёт само по себе. На карте привязанного видно
+         по точке в цвете хозяина. Лошадь под седлом привязать нельзя — сперва слезьте.</p>
+      <p><b>Плот</b> — 3 доски и 1 палка. В лесу он ниоткуда больше не возьмётся,
+         а без него не переплыть озеро и не половить рыбу.</p>
+      <p>Зверь чует добычу только за <b>три клетки</b>. Дальше он вас не ищет —
+         просто бродит по лесу, и мимо волка вполне можно пройти по дуге.</p>
+      <p><b>Выживание сохраняется само.</b> Каждый ход вылазка записывается в браузер,
+         и на первом экране появляется кнопка «Продолжить выживание»: можно закрыть
+         страницу и вернуться на том же раунде, со своими вещами, стенами и зверями.
+         Кнопка «🌲 Выживание» начинает новую вылазку и спросит, не жалко ли стирать
+         старую.</p>
+      <p>Кроме автосохранения есть <b>полка вылазок</b> — та же, что у карт в редакторе.
+         Кнопка «💾 Сохранить вылазку» на панели кладёт партию под своим именем,
+         и таких вылазок можно держать сколько угодно: щелчок по имени в списке
+         перезаписывает её, крестик — удаляет. Открывает их «📂 Загрузить выживание»
+         на первом экране. Там же вылазка показана текстом: скопируйте его в файл —
+         и партию можно будет вернуть даже на другом устройстве, вставив текст обратно.</p>
       <p>Деревянный меч слабее ножа: от зверя спасает только на 5–6, тогда как нож и каменный
          меч — на 4–6. В схватке игроков тот, у кого оружие сильнее, побеждает без кубика;
          нож и каменный меч равны между собой, и тогда бросают кубик. Камня в лесу примерно
          втрое меньше, чем деревьев, так что каменный меч — вещь не на первый день.</p>
+      <p>Сердца есть и в лесу, и мясо 🍖 с рыбой лечит их так же — наевшись досыта, ешьте
+         дальше. Отбившийся зверь после укуса отскакивает на ход, так что раненому
+         есть куда уйти.</p>
       <p>Жизни в лесу не кончаются: смерть забирает рюкзак и возвращает на свою поляну,
          но выбыть из игры нельзя. Партия не заканчивается — играете, сколько хотите,
          а счётчик раундов и рекорд растут по ходу дела.</p>
       <p>Улететь нельзя, можно только держаться: игра считает прожитые раунды и помнит рекорд.
          Каждые 15 раундов в лесу прибавляется волк, а каждые 6 — вокруг поднимаются новые
-         деревья, и ходить становится теснее. Вплотную к игроку дерево не вырастет.</p>
+         деревья — ходить они не мешают, зато дров вокруг прибавляется.
+         Вплотную к игроку дерево не вырастет.
+         Волков в лесу бывает не больше двух.</p>
       <p>Живое шевелится только в видимой части: волк, акула и лошадь ходят, пока они
          у вас на экране. Отбежали достаточно далеко — зверь замирает там, где был,
          и ждёт, пока вы снова не подойдёте. Убежать от волка в лесу можно.</p>
@@ -284,8 +367,10 @@
          Без ножа 🔪 встреча — смерть. С ножом бросок кубика: 1–3 не отбился, 4–6 отбился:
          зверь удирает и пять ходов не нападает, а после третьей победы над ним погибает совсем.
          Нож изредка попадается на поле, а в магазине есть всегда.
-         Коза 🐐 — смирная: не нападает и за игроком не ходит. С любым оружием её можно
-         зарезать, и останется мясо 🍖 на две полоски голода. Мясо падает и с убитого
+         Коза 🐐 — смирная: не нападает и за игроком не ходит. Зарезать её — отдельное
+         действие по кнопке «🐐 Зарезать козу», как рубка дерева: нужно оружие, коза
+         должна быть рядом или на вашей клетке, и уходит на это ход. Останется
+         мясо 🍖 на две полоски голода. Мясо падает и с убитого
          волка или акулы — после третьей победы над зверем. Движущаяся стена 🧱 ездит по своей дорожке и толкает,
          а то и давит. Всё это шевелится после того, как сходили все игроки.</p>
       <p>Зверя и движущуюся стену видно, когда они выходят на клетку, которую вы уже открыли, —
@@ -334,7 +419,7 @@
     <div class="card">
       <div class="who"><span class="dot" id="pdot"></span><span id="pname">Игрок 1</span></div>
       <div class="stat">
-        <span id="plives">❤️ 3</span><span id="pcoins">0</span><span id="pfood"></span>
+        <span id="php"></span><span id="plives">🔁 3</span><span id="pcoins">0</span><span id="pfood"></span>
         <span id="pturn">раунд 1</span>
       </div>
       <div class="bag" id="pbag">Рюкзак пуст</div>
@@ -355,13 +440,19 @@
       <span>🔑 ключ</span><span>🛶 плот</span><span>🔭 труба</span><span>🔪 нож</span>
       <span>🥩 стейк</span><span>🎣 спиннинг</span><span>🐟 рыба</span>
       <span>🌾 сено</span><span>🐴 лошадь</span>
+      <span><svg class="gi" viewBox="0 0 24 24"><g fill="none" stroke="#7fa86a" stroke-width="1.8" stroke-linecap="round"><path d="M7 21V10"/><path d="M12 21V7"/><path d="M17 21v-9"/></g><g fill="#6ea8e8"><circle cx="7" cy="9" r="2.1"/><circle cx="12" cy="6" r="2.4"/><circle cx="17" cy="11" r="2.1"/></g></svg> лён</span>
+      <span><svg class="gi" viewBox="0 0 24 24"><rect x="2.2" y="11" width="19.6" height="7.5" rx="1.6" fill="#b07d4a" stroke="#6d4722" stroke-width="1.3"/><rect x="3.6" y="7.6" width="8" height="4.4" rx="1.6" fill="#e8edf5" stroke="#8c9cb3" stroke-width="1.1"/><path d="M2.2 18.5v2.3M21.8 18.5v2.3" stroke="#6d4722" stroke-width="1.6" stroke-linecap="round"/></svg> кровать</span>
       <span>🐺 волк</span><span>🦈 акула</span><span>🐐 коза</span><span>🍖 мясо</span>
       <span><i class="sw sw-brick"></i> движущаяся стена</span>
       <br><span style="color:var(--wall)">━ стена</span>
       <span style="color:var(--door)">┄ закрытая дверь</span>
       <span style="color:var(--dooropen)">┈ открытая дверь</span>
+      <span style="color:var(--built)">━ своя деревянная стена</span>
+      <span style="color:var(--builts)">━ своя каменная стена</span>
+      <span style="color:var(--builtd)">═ своя дверь (зверю не пройти)</span>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
         <button id="again">Новая игра</button>
+        <button id="survsave" hidden>💾 Сохранить вылазку</button>
         <button id="watchbtn">👁 Смотреть за полем</button>
       </div>
     </div>
@@ -380,12 +471,22 @@ const DIRNAME = ["вверх","вправо","вниз","влево"];
 const COLORS = ["#4da3ff","#ff7b5a","#6ee7a8","#ffd166"];
 /* вода и земля узнаются по заливке клетки, значок им не нужен */
 const SVG_ROCK = `<svg class="gi" viewBox="0 0 24 24"><path d="M3.5 19.5l3.5-10L12 4.5l6.2 4.2L20.5 19.5z" fill="#8d949c" stroke="#464c54" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 9.5L12 12.2l6.2-3.5M12 12.2v7.3" fill="none" stroke="#5c636b" stroke-width="1.2"/></svg>`;
+/* стены, которые игрок ставит сам: деревянная из досок и каменная из камней */
+const SVG_WWALL = `<svg class="gi" viewBox="0 0 24 24"><g fill="#b07d4a" stroke="#6d4722" stroke-width="1.2"><rect x="2.4" y="3.5" width="5.6" height="17" rx="1"/><rect x="9.2" y="3.5" width="5.6" height="17" rx="1"/><rect x="16" y="3.5" width="5.6" height="17" rx="1"/></g></svg>`;
+const SVG_SWALL = `<svg class="gi" viewBox="0 0 24 24"><g fill="#9aa2ab" stroke="#464c54" stroke-width="1.1"><rect x="2.5" y="4" width="8.4" height="5" rx="1"/><rect x="13.1" y="4" width="8.4" height="5" rx="1"/><rect x="2.5" y="10.5" width="19" height="5" rx="1"/><rect x="2.5" y="17" width="8.4" height="5" rx="1"/><rect x="13.1" y="17" width="8.4" height="5" rx="1"/></g></svg>`;
+/* луговина, лён и кровать — своей графикой: эмодзи для них либо заняты, либо ненадёжны */
+const SVG_HAYF = `<svg class="gi" viewBox="0 0 24 24"><g fill="none" stroke="#d9b24a" stroke-width="2" stroke-linecap="round"><path d="M12 21V9"/><path d="M12 13L6.5 7.5"/><path d="M12 13l5.5-5.5"/><path d="M12 18l-4-4"/><path d="M12 18l4-4"/></g></svg>`;
+const SVG_FLAXF= `<svg class="gi" viewBox="0 0 24 24"><g fill="none" stroke="#7fa86a" stroke-width="1.8" stroke-linecap="round"><path d="M7 21V10"/><path d="M12 21V7"/><path d="M17 21v-9"/></g><g fill="#6ea8e8"><circle cx="7" cy="9" r="2.1"/><circle cx="12" cy="6" r="2.4"/><circle cx="17" cy="11" r="2.1"/></g></svg>`;
+const SVG_BED  = `<svg class="gi" viewBox="0 0 24 24"><rect x="2.2" y="11" width="19.6" height="7.5" rx="1.6" fill="#b07d4a" stroke="#6d4722" stroke-width="1.3"/><rect x="3.6" y="7.6" width="8" height="4.4" rx="1.6" fill="#e8edf5" stroke="#8c9cb3" stroke-width="1.1"/><path d="M2.2 18.5v2.3M21.8 18.5v2.3" stroke="#6d4722" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 const TICON = {empty:"",pit:"🕳",spikes:"🔺",water:"",shop:"🏪",exit:"🚁",spawn:"🏠",
-               tree:"🌳",rock:SVG_ROCK};
+               tree:"🌳",rock:SVG_ROCK,hay:SVG_HAYF,flax:SVG_FLAXF};
 const INAME = {coin:"Монеты",ladder:"Лестница",key:"Ключ",raft:"Плот",spyglass:"Подзорная труба",
                knife:"Нож",steak:"Стейк",rod:"Спиннинг",fish:"Рыба",hay:"Сено",
                stick:"Палка",plank:"Доска",stone:"Камень",meat:"Мясо",
-               pick:"Деревянная кирка",sword:"Деревянный меч",stoneSword:"Каменный меч"};
+               pick:"Деревянная кирка",sword:"Деревянный меч",stoneSword:"Каменный меч",
+               stonePick:"Каменная кирка",wwall:"Деревянная стена",swall:"Каменная стена",
+               door:"Дверь",flax:"Лён",thread:"Нитка",cloth:"Ткань",bed:"Кровать",
+               leash:"Поводок"};
 const HORSE = "🐴";
 const FOOD = {steak:1, fish:2, meat:2};             // сколько полосок возвращает еда
 const bite = () => (params && params.bite ? params.bite : 35) / 100;   // шанс поклёвки
@@ -398,19 +499,51 @@ const SVG_PLANK = `<svg class="gi" viewBox="0 0 24 24"><rect x="2.5" y="8" width
 const SVG_PICK  = `<svg class="gi" viewBox="0 0 24 24"><path d="M12 7.5V21" fill="none" stroke="#9a6b3f" stroke-width="2.6" stroke-linecap="round"/><path d="M3.2 9.8C7 5.4 17 5.4 20.8 9.8c-3.1-1.7-5.8-2.5-8.8-2.5s-5.7.8-8.8 2.5z" fill="#b07d4a" stroke="#6d4722" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
 const SVG_SWORD = `<svg class="gi" viewBox="0 0 24 24"><g stroke="#6d4722" stroke-width="1.2" stroke-linejoin="round"><path d="M14.5 3.2l4 1.8-9 10.2-2.8-1.2z" fill="#c69258"/><path d="M5.4 15.6l3.2 1.4-2.1 2.8-2.6-1.1z" fill="#9a6b3f"/></g></svg>`;
 const SVG_SSWORD= `<svg class="gi" viewBox="0 0 24 24"><g stroke-width="1.2" stroke-linejoin="round"><path d="M14.5 3.2l4 1.8-9 10.2-2.8-1.2z" fill="#9aa2ab" stroke="#464c54"/><path d="M5.4 15.6l3.2 1.4-2.1 2.8-2.6-1.1z" fill="#9a6b3f" stroke="#6d4722"/></g></svg>`;
+const SVG_THREAD= `<svg class="gi" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="5.2" ry="8.4" fill="#e8dcc0" stroke="#8c7c58" stroke-width="1.3"/><path d="M8.4 5.6C10 9 10 15 8.4 18.4M15.6 5.6C14 9 14 15 15.6 18.4" fill="none" stroke="#8c7c58" stroke-width="1"/><path d="M17 12.4c2.6.6 3.8 2.4 3.6 4.6" fill="none" stroke="#cfd8e6" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+const SVG_CLOTH = `<svg class="gi" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2" fill="#dfe6f0" stroke="#8c9cb3" stroke-width="1.3"/><path d="M3 9.5h18M3 14.5h18M8.5 4.5v15M15.5 4.5v15" fill="none" stroke="#b6c2d4" stroke-width="1"/></svg>`;
+const SVG_LEASH = `<svg class="gi" viewBox="0 0 24 24"><path d="M4 5.5c5 0 5 5 10 5s5-5 6-5" fill="none" stroke="#c9a06a" stroke-width="2.2" stroke-linecap="round"/><circle cx="8.5" cy="17" r="4.6" fill="none" stroke="#c9a06a" stroke-width="2.2"/><path d="M12.6 15.2L20 10.5" fill="none" stroke="#c9a06a" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+const SVG_SPICK = `<svg class="gi" viewBox="0 0 24 24"><path d="M12 7.5V21" fill="none" stroke="#9a6b3f" stroke-width="2.6" stroke-linecap="round"/><path d="M3.2 9.8C7 5.4 17 5.4 20.8 9.8c-3.1-1.7-5.8-2.5-8.8-2.5s-5.7.8-8.8 2.5z" fill="#9aa2ab" stroke="#464c54" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
 const IICON = {coin:SVG_COIN,ladder:SVG_LADDER,key:"🔑",raft:"🛶",spyglass:"🔭",knife:"🔪",
                steak:"🥩",rod:"🎣",fish:"🐟",hay:"🌾",meat:"🍖",
                stick:SVG_STICK,plank:SVG_PLANK,stone:SVG_ROCK,
-               pick:SVG_PICK,sword:SVG_SWORD,stoneSword:SVG_SSWORD};
+               pick:SVG_PICK,sword:SVG_SWORD,stoneSword:SVG_SSWORD,
+               stonePick:SVG_SPICK,wwall:SVG_WWALL,swall:SVG_SWALL,door:"🚪",
+               flax:SVG_FLAXF,thread:SVG_THREAD,cloth:SVG_CLOTH,bed:SVG_BED,
+               leash:SVG_LEASH};
 
 /* ===================== верстак ===================== */
 const CRAFT=[
   {id:"pick",       need:{stick:2, plank:3}},
+  {id:"stonePick",  need:{stick:2, stone:3}},
   {id:"sword",      need:{stick:1, plank:2}},
-  {id:"stoneSword", need:{stick:1, stone:2}}
+  {id:"stoneSword", need:{stick:1, stone:2}},
+  {id:"wwall",      need:{plank:5}},
+  {id:"swall",      need:{stone:5}},
+  {id:"door",       need:{plank:3, stone:2}},
+  {id:"thread",     need:{flax:1}, count:2},
+  {id:"cloth",      need:{thread:4}},
+  {id:"bed",        need:{cloth:2, hay:2}},
+  {id:"leash",      need:{thread:2, flax:1}},
+  {id:"raft",       need:{plank:3, stick:1}}
 ];
+/* кирка: каменная умеет всё, что деревянная, и вдобавок ломает стены */
+const hasPick  = pl => pl.items.includes("pick") || pl.items.includes("stonePick");
+const WALLS    = {wwall:true, swall:true, door:true};   // всё, что ставится на грань
+const BACK     = {wwall:["plank","plank"], swall:["stone","stone"], door:["plank","stone"]};
+const SENSE    = 3;         // дальше трёх клеток зверь добычу не чует
+/* «поставил деревянную стену», «за деревянной стеной» — без падежей выходит коряво */
+const WNAME={wwall:{acc:"деревянную стену", ins:"деревянной стеной"},
+             swall:{acc:"каменную стену",   ins:"каменной стеной"},
+             door: {acc:"дверь",            ins:"дверью"}};
+const GNAW     = 10;        // сколько ходов зверь грызёт деревянную стену
+const SMELL    = 0.10;      // шанс учуять добычу сквозь стену
 const PLUR={stick:["палка","палки","палок"], plank:["доска","доски","досок"],
-            stone:["камень","камня","камней"]};
+            stone:["камень","камня","камней"], flax:["лён","льна","льна"],
+            thread:["нитка","нитки","ниток"], cloth:["ткань","ткани","тканей"],
+            hay:["сено","сена","сена"]};
+const MATS=["stick","plank","stone","flax","thread","cloth","hay"];   // что лежит на верстаке
+const HARVEST ={hay:"hay", flax:"flax"};                    // что снимается с клетки
+const PICKNAME={hay:"Накосить сена", flax:"Нарвать льна"};
 function plural(n, forms){
   const a=n%10, b=n%100;
   if(a===1 && b!==11) return forms[0];
@@ -439,8 +572,10 @@ const manIcon = q =>
   q.riding ? `🏇<span style="font-size:.4em;vertical-align:top;color:${q.color}">●</span>`
   : (q.onRaft || C(q.x,q.y).t==="water") ? SVG_BOAT(q.color)
   : SVG_MAN(q.color);
-const PRICE = {steak:1, hay:1, rod:2, ladder:3, raft:4, spyglass:4, knife:5}; // рыба не продаётся
+/* рыба не продаётся; каменная кирка в лавке есть, иначе в лабиринте её взять неоткуда */
+const PRICE = {steak:1, hay:1, rod:2, ladder:3, raft:4, spyglass:4, knife:5, stonePick:6};
 const HUNGER_STEP = 15;                             // ходов на одну полоску голода
+const HP_MAX = 3;                                   // здоровье: буфер перед смертью
 
 let W=12, H=12, cells=[], eV=[], eH=[];            // поле
 let beasts=[], movers=[], horses=[];                // волки, акулы, движущиеся стены и лошади
@@ -494,10 +629,13 @@ function genCell(x,y){
   const r=noise(x,y,1);
   if(r<0.13) c.t="tree";
   else if(r<0.17) c.t="rock";                         // камень втрое реже дерева
+  else if(r<0.21) c.t="hay";                          // луговина: с неё косят сено
+  else if(r<0.24) c.t="flax";                         // лён реже травы
   return c;                                           // предметов в лесу нет вовсе
 }
 
-/* лес понемногу зарастает: раз в несколько раундов вокруг игроков поднимаются деревья */
+/* лес понемногу зарастает: раз в несколько раундов вокруг игроков поднимаются
+   деревья, а между ними — трава и лён, иначе скошенное не вернулось бы никогда */
 function growTrees(){
   const live=P.filter(q=>q.alive);
   if(!live.length) return;
@@ -507,13 +645,15 @@ function growTrees(){
     const dx=rnd(17)-8, dy=rnd(17)-8;
     if(Math.abs(dx)<=1 && Math.abs(dy)<=1) continue;
     const x=who.x+dx, y=who.y+dy, c=C(x,y);
-    if(c.t!=="empty" || c.items.length || c.coins) continue;
+    if(c.t!=="empty" || c.bed || c.items.length || c.coins) continue;
     if(beastAt(x,y) || horseAt(x,y)) continue;
     // вплотную к игроку не растёт, чтобы никого не замуровать
     if(P.some(q=>q.alive && Math.abs(q.x-x)<=1 && Math.abs(q.y-y)<=1)) continue;
-    c.t="tree"; planted++;
+    const r=Math.random();
+    c.t = r<0.5 ? "tree" : r<0.8 ? "hay" : "flax";
+    planted++;
   }
-  if(planted) say("Лес подрос: деревьев вокруг стало больше.");
+  if(planted) say("Лес подрос: вокруг прибавилось деревьев, травы и льна.");
 }
 
 /* единственный способ добраться до клетки — и в лабиринте, и в бесконечном мире */
@@ -525,7 +665,26 @@ function C(x,y){
   return c;
 }
 
-const BLOCKER={tree:true, rock:true};                 // сквозь них не пройти
+/* сквозь камень не пройти никому; деревья чаща не перекрывает — между стволами
+   пролезают и люди, и звери, дерево только стоит на клетке, пока его не срубят */
+const BLOCKER={rock:true};
+const solid = c => !!BLOCKER[c.t];
+const solidAt = (x,y) => inB(x,y) && solid(C(x,y));
+
+/* Поставленные игроком стены стоят не в клетке, а на грани между клетками —
+   как стены лабиринта. Грань у соседей одна и та же, поэтому ключ приводим
+   к общему виду: горизонтальные H:x:y лежат под клеткой (x,y), вертикальные
+   V:x:y — справа от неё. Хранятся отдельно от лабиринта: в лесу граней нет,
+   а эти есть, и их можно сломать. */
+let barriers=new Map();
+function edgeId(x,y,d){
+  if(d===0) return "H:"+x+":"+(y-1);
+  if(d===1) return "V:"+x+":"+y;
+  if(d===2) return "H:"+x+":"+y;
+  return "V:"+(x-1)+":"+y;
+}
+const wallOn  = (x,y,d) => barriers.get(edgeId(x,y,d)) || null;
+const wallBar = (x,y,d) => barriers.has(edgeId(x,y,d));
 
 /* грань между клеткой (x,y) и соседом в направлении d.
    Значения: 0 — свободно, 1 — стена, 2 — закрытая дверь, 3 — открытая дверь. */
@@ -535,8 +694,11 @@ function edgeRef(x,y,d){
   if(d===2) return y>=H-1 ? null : {a:eH, i:y,   j:x};
   return             x<=0 ? null : {a:eV, i:y,   j:x-1};
 }
-/* в бесконечном мире стен нет: все грани свободны и край поля не кончается */
+/* в бесконечном мире стен лабиринта нет, но поставленная держит одинаково везде.
+   Своя дверь для игрока не помеха — она держит только зверьё, поэтому здесь её нет. */
 function edgeVal(x,y,d){
+  const own=barriers.get(edgeId(x,y,d));
+  if(own && own!=="door") return 1;
   if(endless) return 0;
   const r=edgeRef(x,y,d); return r ? r.a[r.i][r.j] : 1;
 }
@@ -816,7 +978,7 @@ function freeSpotNear(cx,cy,r){
     const x=cx+Math.round((Math.random()*2-1)*r);
     const y=cy+Math.round((Math.random()*2-1)*r);
     const c=C(x,y);
-    if(c.t!=="empty" || BLOCKER[c.t]) continue;
+    if(c.t!=="empty" || solid(c)) continue;
     if(beastAt(x,y) || horseAt(x,y) || P.some(q=>q.alive && q.x===x && q.y===y)) continue;
     return [x,y];
   }
@@ -837,18 +999,110 @@ function spawnBeast(kind, fromX, fromY){
   return false;
 }
 
-/* чем оборачивается смерть: в лабиринте жизнью, в лесу — потерей вещей и дороги назад */
-const DEATHCOST = () => endless
-  ? "Вы очнётесь на своей поляне, рюкзак останется лежать на месте гибели."
-  : "Минус одна жизнь.";
+/* чем оборачивается урон: пока есть здоровье — только им, на последнем сердце — гибелью */
+const DEATHCOST = pl => (pl && pl.hp>1)
+  ? "Минус единица здоровья, останется "+(pl.hp-1)+" из "+HP_MAX+
+    ". С места игрок не сдвинется и вещей не потеряет."
+  : "Здоровье кончилось. " + (endless
+      ? "Вы очнётесь на своей поляне, рюкзак останется лежать на месте гибели."
+      : "Минус одна жизнь, возвращение в точку возрождения, рюкзак остаётся на месте.");
 
 const survRecord=()=>{ try{ return Number(localStorage.getItem("labirint-survival")||0); }catch(e){ return 0; } };
 const survSave=n=>{ try{ localStorage.setItem("labirint-survival", String(n)); }catch(e){} };
+
+/* ===== сохранение выживания =====
+   Лес считается от координат, одинаковый всегда, поэтому в сохранении незачем
+   держать весь мир — хватает клеток, которые игроки успели изменить: срубленные
+   деревья, разбитые камни, брошенные вещи. Остальное родится заново таким же. */
+const SURV_KEY="labirint-survival-game";
+
+function survPack(){
+  const cellsOut=[];
+  sparse.forEach((c,k)=>{
+    const p=k.split(","), x=+p[0], y=+p[1];
+    const g=genCell(x,y);
+    if(c.t===g.t && c.spawnOf===null && !c.items.length && !c.coins && !c.ladder && !c.bed) return;
+    cellsOut.push([x, y, c.t, c.items, c.coins, c.ladder?1:0, c.spawnOf, c.bed?1:0]);
+  });
+  return {
+    v:1, round, cur, params, cells:cellsOut,
+    barriers:[...barriers],
+    horses:horses.map(h=>({x:h.x, y:h.y, tamed:h.tamed==null?null:h.tamed})),
+    beasts:beasts.map(b=>({kind:b.kind, x:b.x, y:b.y, flee:b.flee||0, hurt:b.hurt||0,
+                           tamed:b.tamed==null?null:b.tamed})),
+    players:P.map(q=>({
+      id:q.id, name:q.name, bot:!!q.bot, color:q.color, x:q.x, y:q.y,
+      spawn:q.spawn, prev:q.prev, lives:q.lives, hp:q.hp, coins:q.coins,
+      items:q.items.slice(), alive:q.alive, won:q.won, food:q.food, steps:q.steps||0,
+      stuck:!!q.stuck, stuckTurns:q.stuckTurns||0, onRaft:!!q.onRaft,
+      riding: q.riding ? {horse:horses.indexOf(q.riding.horse), left:q.riding.left} : null
+    }))
+  };
+}
+
+function survStore(){
+  if(!endless || over) return;
+  try{ localStorage.setItem(SURV_KEY, JSON.stringify(survPack())); }
+  catch(e){ /* место кончилось — играем без сохранения */ }
+}
+function survHas(){
+  try{ return !!localStorage.getItem(SURV_KEY); }catch(e){ return false; }
+}
+function survDrop(){ try{ localStorage.removeItem(SURV_KEY); }catch(e){} }
+
+function survResume(){
+  let d=null;
+  try{ d=JSON.parse(localStorage.getItem(SURV_KEY)); }catch(e){}
+  if(!d || !d.players || !d.players.length){ alert("Сохранение не читается."); return; }
+  survApply(d);
+}
+
+/* поднять партию из разобранного сохранения — хоть из автосейва, хоть с полки */
+function survApply(d){
+  endless=true; sparse=new Map(); lastView=null;
+  W=0; H=0; cells=[]; eV=[]; eH=[];
+  movers=[]; net=null; clientBoard=null; hostSeat=null; watch=false;
+  params=d.params;
+  barriers=new Map(d.barriers||[]);
+  horses=(d.horses||[]).map(h=>({x:h.x, y:h.y, tamed:h.tamed==null?null:h.tamed}));
+  beasts=(d.beasts||[]).map(b=>({kind:b.kind, x:b.x, y:b.y, flee:b.flee||0, hurt:b.hurt||0,
+                                 tamed:b.tamed==null?null:b.tamed,
+                                 free:true, home:new Set()}));
+  (d.cells||[]).forEach(a=>{
+    const c=C(a[0],a[1]);
+    c.t=a[2]; c.items=(a[3]||[]).slice(); c.coins=a[4]||0; c.ladder=!!a[5];
+    c.spawnOf = a[6]===undefined ? null : a[6];
+    c.bed=!!a[7];
+  });
+
+  P=d.players.map(s=>({
+    id:s.id, name:s.name, bot:!!s.bot, color:s.color, x:s.x, y:s.y,
+    spawn:s.spawn, prev:s.prev, lives:s.lives, hp:s.hp===undefined?HP_MAX:s.hp,
+    coins:s.coins, items:(s.items||[]).slice(), alive:s.alive!==false, won:!!s.won,
+    food:s.food, steps:s.steps||0, stuck:!!s.stuck, stuckTurns:s.stuckTurns||0,
+    onRaft:!!s.onRaft, riding:null, mem:new Map(), known:new Set()
+  }));
+  d.players.forEach((s,i)=>{
+    const h = s.riding && horses[s.riding.horse];
+    if(h){ P[i].riding={horse:h, left:s.riding.left}; h.rider=P[i]; }
+  });
+  P.forEach(q=>remember(q,q.x,q.y));
+
+  cur=d.cur||0; round=d.round||1; over=false; skipped=false; spyMode=null; findShow=null;
+  document.getElementById("setup").hidden=true;
+  document.getElementById("editor").hidden=true;
+  document.getElementById("game").hidden=false;
+  document.getElementById("log").innerHTML="";
+  buildBoard();
+  say("Выживание продолжается с раунда "+round+".");
+  beginTurn();
+}
 
 function startSurvival(p){
   endless=true; sparse=new Map(); lastView=null;
   W=0; H=0; cells=[]; eV=[]; eH=[];
   beasts=[]; movers=[]; horses=[];
+  survDrop();                                 // новая вылазка затирает старое сохранение
   params=Object.assign({}, p, {hear:0, movers:0});
 
   const spawns=[];
@@ -872,13 +1126,14 @@ function startSurvival(p){
 function startGame(spawns){
   const p=params;
   const bots=Math.min(p.bots, p.players);
+  barriers=new Map();                      // поставленные стены живут только одну партию
   P=[];
   for(let i=0;i<p.players;i++){
     const [x,y]=spawns[i];
     const bot = i >= p.players-bots;
     P.push({id:i, name:(bot?"Бот ":"Игрок ")+(i+1), bot, color:COLORS[i], x, y,
             spawn:{x,y}, prev:{x,y},
-            lives:p.lives, coins:p.coins, items:[], alive:true, won:false,
+            lives:p.lives, hp:HP_MAX, coins:p.coins, items:[], alive:true, won:false,
             food:p.food, steps:0,
             stuck:false, stuckTurns:0, onRaft:false, riding:null,
             mem:new Map(), known:new Set()});
@@ -928,7 +1183,7 @@ function buildBoard(boardId, click){
 /* ===================== память игрока ===================== */
 function snap(x,y){
   const c=C(x,y);
-  return {t:c.t, items:c.items.slice(), coins:c.coins, ladder:c.ladder};
+  return {t:c.t, items:c.items.slice(), coins:c.coins, ladder:c.ladder, bed:!!c.bed};
 }
 function remember(pl,x,y){
   pl.mem.set(key(x,y), snap(x,y));
@@ -954,7 +1209,7 @@ function blankView(){
   return {w:endless?VIEW:W, h:endless?VIEW:H, ox:0, oy:0, round, over, cells:[],
           selfIcon:"", watch:false, spy:false, myTurn:false,
           turn:{name:t.name, color:t.color, bot:!!t.bot},
-          me:{name:"Ведущий", color:"#8c9cb3", lives:0, endless, coins:0,
+          me:{name:"Ведущий", color:"#8c9cb3", lives:0, hp:0, hpMax:0, endless, coins:0,
               food:0, maxFood:0, steps:0, items:[], riding:null},
           bag:"Вы ведущий — партия считается у вас",
           hum:{cls:"hum", html:"🎲 Поле вам не показывается: иначе туман перестал бы быть честным."},
@@ -985,6 +1240,7 @@ function buildView(eyes, who){
     const s = (open || here) ? snap(x,y) : mem;
 
     const c = {x, y, t:s.t, items:s.items.slice(), coins:s.coins, ladder:!!s.ladder,
+               bed:!!s.bed,
                here, known:!open, zone:false, mover:false, big:false,
                actors:[], edges:[-1,-1,-1,-1]};
 
@@ -992,22 +1248,32 @@ function buildView(eyes, who){
     if(open || here)
       P.forEach(q=>{ if(q.alive && q.x===x && q.y===y && (open || q!==eyes)) c.actors.push(manIcon(q)); });
     if(open || here || mem){
+      // привязанное помечается точкой в цвете хозяина — чтобы не путать со свободным
+      const tag=a=>{
+        const o=a.tamed==null ? null : P.find(q=>q.id===a.tamed);
+        return o ? `<span style="font-size:.45em;vertical-align:top;color:${o.color}">●</span>` : "";
+      };
       const bb=beastAt(x,y);
       if(bb) c.actors.push(BICON[bb.kind] + (bb.hurt
-        ? `<span style="font-size:.45em;vertical-align:top;color:#ff8c64">${bb.hurt}</span>` : ""));
-      if(horseAt(x,y)) c.actors.push(HORSE);
+        ? `<span style="font-size:.45em;vertical-align:top;color:#ff8c64">${bb.hurt}</span>` : "")
+        + tag(bb));
+      const hh=horseAt(x,y);
+      if(hh) c.actors.push(HORSE + tag(hh));
       if(moverAt(x,y)) c.mover=true;
     }
     if(findShow && findShow.x===x && findShow.y===y && (c.coins>0 || c.items.length)) c.big=true;
 
     for(let d=0;d<4;d++){
       const k=edgeKey(x,y,d);
-      if(k && (open || eyes.known.has(k))) c.edges[d]=edgeVal(x,y,d);
+      if(!k || !(open || eyes.known.has(k))) continue;
+      const own=wallOn(x,y,d);                   // 4, 5 и 6 — поставленные игроками
+      c.edges[d] = own ? (own==="wwall" ? 4 : own==="swall" ? 5 : 6) : edgeVal(x,y,d);
     }
     v.cells.push(c);
   }
 
   v.me = {name:who.name, color:who.color, lives:who.lives, endless, coins:who.coins,
+          hp:who.hp, hpMax:HP_MAX,
           food:who.food, maxFood:params.food, steps:who.steps||0,
           riding: who.riding ? {left:who.riding.left} : null,
           items: who.items.slice()};
@@ -1048,7 +1314,9 @@ function actionList(pl){
   if(params.food) ["steak","fish","meat"].forEach(k=>{
     if(pl.items.includes(k))
       add("eat:"+k, IICON[k]+" Съесть "+INAME[k].toLowerCase()+" (+"+FOOD[k]+")"+
-          (pl.food<params.food?"":" — вы и так сыты"));
+          (pl.food<params.food ? ""
+           : pl.hp<HP_MAX ? " — на полный желудок залечит рану"
+                          : " — вы и так сыты"));
   });
   if(pl.items.includes("rod") && onWater(pl))
     add("fish", "🎣 Ловить рыбу (шанс "+Math.round(bite()*100)+" %)");
@@ -1059,15 +1327,57 @@ function actionList(pl){
   }
   if(c.t==="shop") add("shop", "Магазин");
   if(pl.items.includes("spyglass")) add("spy", "Посмотреть в подзорную трубу");
-  for(let d=0;d<4;d++){                      // срубить дерево или разбить камень рядом
+  if(c.t==="tree") add("chop:4", "🪓 Срубить дерево (здесь)");
+  if(HARVEST[c.t]) add("pick:4", IICON[HARVEST[c.t]]+" "+PICKNAME[c.t]+" (здесь)");
+  const goatHere=beastAt(pl.x,pl.y);
+  if(goatHere && goatHere.kind==="goat" && weapon(pl))
+    add("goat:4", "🐐 Зарезать козу (здесь)");
+  if(c.bed){
+    add("sleep", SVG_BED+" Спать — сделать кровать точкой возрождения",
+        !(pl.spawn.x===pl.x && pl.spawn.y===pl.y));
+    add("unbed", SVG_BED+" Забрать кровать в рюкзак");
+  }
+
+  for(let d=0;d<4;d++){                      // срубить, разбить, сломать или поставить рядом
     const [nx,ny]=stepXY(pl.x,pl.y,d);
     if(!inB(nx,ny)) continue;
+    const mine=wallOn(pl.x,pl.y,d);
+    // стена лабиринта ломается тоже, но предлагать её можно лишь когда игрок о ней знает:
+    // иначе кнопка выдала бы вслепую, где стена, а где свободный проход
+    const ek=edgeKey(pl.x,pl.y,d);
+    const maze = !mine && ek && pl.known.has(ek) && edgeVal(pl.x,pl.y,d)===1;
+    if(mine || maze){
+      if(pl.items.includes("stonePick"))
+        add("bash:"+d, IICON.stonePick+" "+
+            (mine ? "Сломать "+WNAME[mine].acc : "Проломить стену")+" ("+DIRNAME[d]+")");
+      if(mine!=="door") continue;              // за глухой стеной рубить и ставить нечего
+    }
     const t=C(nx,ny).t;
+    const g=beastAt(nx,ny);
+    if(g && g.kind==="goat" && weapon(pl))
+      add("goat:"+d, "🐐 Зарезать козу ("+DIRNAME[d]+")");
     if(t==="tree") add("chop:"+d, "🪓 Срубить дерево ("+DIRNAME[d]+")");
-    else if(t==="rock" && pl.items.includes("pick"))
+    else if(HARVEST[t]) add("pick:"+d, IICON[HARVEST[t]]+" "+PICKNAME[t]+" ("+DIRNAME[d]+")");
+    else if(t==="rock" && hasPick(pl))
       add("mine:"+d, IICON.pick+" Разбить камень ("+DIRNAME[d]+")");
+    if(canBuild(pl,d))
+      ["wwall","swall","door"].forEach(k=>{ if(pl.items.includes(k))
+        add("build:"+k+":"+d, IICON[k]+" Поставить "+WNAME[k].acc+" ("+DIRNAME[d]+")"); });
+    if(pl.items.includes("bed") && canBed(nx,ny))
+      add("bed:"+d, SVG_BED+" Поставить кровать ("+DIRNAME[d]+")");
   }
-  if(countOf(pl,"stick") || countOf(pl,"plank") || countOf(pl,"stone")) add("craft", "🛠 Верстак");
+  if(pl.items.includes("bed") && canBed(pl.x,pl.y))
+    add("bed:4", SVG_BED+" Поставить кровать (здесь)");
+  for(let d=0;d<=4;d++){                     // поводок: привязать или отвязать живое рядом
+    const [nx,ny]=aimXY(pl,d);
+    if(!inB(nx,ny)) continue;
+    const a=critterAt(nx,ny);
+    if(!a) continue;
+    if(a.tamed===pl.id) add("untie:"+d, SVG_LEASH+" Отвязать "+critterName(a)+" ("+AIMNAME(d)+")");
+    else if(a.tamed==null && pl.items.includes("leash") && !a.rider)
+      add("tie:"+d, SVG_LEASH+" Привязать "+critterName(a)+" ("+AIMNAME(d)+")");
+  }
+  if(MATS.some(k=>countOf(pl,k))) add("craft", "🛠 Верстак");
   if(pl.items.length) add("drop", "🗑 Выбросить предмет");
   const loot=[];
   if(c.coins>0) loot.push("монеты ("+c.coins+")");
@@ -1091,6 +1401,15 @@ function doAct(pl, id){
   else if(a==="spy") actSpy();
   else if(a==="chop") actChop(Number(arg));
   else if(a==="mine") actMine(Number(arg));
+  else if(a==="goat") actGoat(Number(arg));
+  else if(a==="pick") actPick(Number(arg));
+  else if(a==="bed") actBed(Number(arg));
+  else if(a==="sleep") actSleep();
+  else if(a==="unbed") actUnbed();
+  else if(a==="tie") actTie(Number(arg));
+  else if(a==="untie") actUntie(Number(arg));
+  else if(a==="build"){ const [k,d]=arg.split(":"); actBuild(k, Number(d)); }
+  else if(a==="bash") actBash(Number(arg));
   else if(a==="craft") actCraft();
   else if(a==="drop") actDrop();
   else if(a==="pickup") actPickup();
@@ -1122,7 +1441,7 @@ function paint(v){
     if(c.coins>0) marks.push(IICON.coin);
     c.items.forEach(i=>marks.push(IICON[i]));
     if((c.t==="pit" || c.t==="spikes") && c.ladder) marks.push(IICON.ladder);
-    const terr=TICON[c.t]||"";
+    const terr = c.bed ? SVG_BED : (TICON[c.t]||"");
 
     let html;
     if(c.big && marks.length){
@@ -1151,6 +1470,9 @@ function paint(v){
       if(ev===1) el.classList.add("w-"+side[d]);
       else if(ev===2) el.classList.add("d-"+side[d]);
       else if(ev===3) el.classList.add("o-"+side[d]);
+      else if(ev===4) el.classList.add("bw-"+side[d]);
+      else if(ev===5) el.classList.add("bs-"+side[d]);
+      else if(ev===6) el.classList.add("bd-"+side[d]);
     }
   });
 
@@ -1159,9 +1481,18 @@ function paint(v){
 
 function paintPanel(v){
   const me=v.me;
+  const sv=document.getElementById("survsave");
+  if(sv) sv.hidden = !(me.endless && !net);     // сохраняется только своё выживание
   document.getElementById("pdot").style.background=me.color;
   document.getElementById("pname").textContent=me.name;
-  document.getElementById("plives").textContent = me.endless ? "❤️ ∞" : "❤️ "+me.lives;
+  const hpb=document.getElementById("php");
+  let hearts="";
+  for(let i=0;i<me.hpMax;i++) hearts+=`<i class="hb${i<me.hp?" hp":""}"></i>`;
+  hpb.innerHTML = me.hpMax ? "❤️ "+hearts : "";
+  hpb.title = "Здоровье: раны тратят его, вещи и место при этом остаются";
+  const lv=document.getElementById("plives");
+  lv.textContent = me.endless ? "🔁 ∞" : "🔁 "+me.lives;
+  lv.title = "Возрождения: тратятся, когда здоровье кончилось";
   document.getElementById("pcoins").innerHTML=SVG_COIN+" "+me.coins;
 
   const fd=document.getElementById("pfood");
@@ -1207,18 +1538,19 @@ function say(t){
 function beginTurn(){
   const pl=P[cur];
   if(over) return;
+  survStore();                 // начало хода — удобная точка: здесь партия цельная
   if(!pl.alive){ nextPlayer(); return; }
   // три хода в яме без лестницы — смерть, сколько бы игроков ни было в партии
   if(pl.stuck && !pl.items.includes("ladder") && !C(pl.x,pl.y).ladder){
     pl.stuckTurns++;
     if(pl.stuckTurns>=3){
-      say(pl.name+" просидел в яме три хода и погиб.");
+      say(pl.name+" просидел в яме три хода и расшибся.");
       render();
       notify(pl,"Яма",
         `<p class="findrow">🕳</p>
          <p><b style="color:${pl.color}">${pl.name}</b> не выбрался из ямы за три хода.
-            Минус одна жизнь, рюкзак остался наверху.</p>`,
-        ()=>death(pl,"яма",()=>nextPlayer()));
+            ${DEATHCOST(pl)}</p>`,
+        ()=>hurt(pl,"яма",()=>nextPlayer()));
       return;
     }
     say(pl.name+" сидит в яме, ход "+pl.stuckTurns+" из 3. Нужна лестница или сосед.");
@@ -1247,6 +1579,22 @@ function botTurn(pl){
   if(params.food && pl.food<=2){
     const meal=["meat","fish","steak"].find(k=>pl.items.includes(k));
     if(meal){ actEat(meal); return; }
+  }
+
+  // сыт, но ранен — лишняя еда уходит в здоровье, и терять тут нечего
+  if(params.food && pl.food>=params.food && pl.hp<HP_MAX){
+    const meal=["steak","fish","meat"].find(k=>pl.items.includes(k));
+    if(meal){ actEat(meal); return; }
+  }
+
+  // коза под рукой и есть чем резать — мясо про запас
+  if(weapon(pl) && !pl.items.includes("meat")){
+    for(let d=4;d>=0;d--){
+      const [nx,ny]=aimXY(pl,d);
+      if(!inB(nx,ny)) continue;
+      const g=beastAt(nx,ny);
+      if(g && g.kind==="goat"){ actGoat(d); return; }
+    }
   }
 
   // стоит на воде со спиннингом и без еды — самое время забросить
@@ -1295,8 +1643,8 @@ function botDir(pl){
     const [nx,ny]=stepXY(pl.x,pl.y,d);
     if(!inB(nx,ny)) continue;
     const ek=edgeKey(pl.x,pl.y,d), ev=edgeVal(pl.x,pl.y,d);
-    const knownEdge = ek && pl.known.has(ek);
-    if(knownEdge && ev===1) continue;
+    const knownEdge = (ek && pl.known.has(ek)) || wallBar(pl.x,pl.y,d);
+    if(knownEdge && ev===1) continue;          // поставленную стену бот видит всегда
     if(knownEdge && ev===2 && !pl.items.includes("key")) continue;
 
     const mem=pl.mem.get(key(nx,ny));
@@ -1336,8 +1684,8 @@ function endTurn(){
         render();
         notify(pl,"Голод",
           `<p class="findrow">🥩</p>
-           <p><b style="color:${pl.color}">${pl.name}</b> умер от голода. ${DEATHCOST()}</p>`,
-          ()=>death(pl,"голод",()=>nextPlayer()));
+           <p><b style="color:${pl.color}">${pl.name}</b> выбился из сил от голода. ${DEATHCOST(pl)}</p>`,
+          ()=>hurt(pl,"голод",()=>nextPlayer()));
         return;
       }
       say(pl.name+" проголодался, полосок осталось: "+pl.food+".");
@@ -1347,7 +1695,7 @@ function endTurn(){
           `<p class="findrow">🥩</p>
            <p><b style="color:${pl.color}">${pl.name}</b>, ${pl.food===1
              ? "осталась <b>последняя</b> полоска. Ещё "+HUNGER_STEP+
-               " ходов без еды — и минус жизнь."
+               " ходов без еды — и минус сердце."
              : "осталось <b>две</b> полоски. Пора искать еду."}</p>
            <p>Стейк лежит на поле и стоит 1 монету в магазине, рыбу ловят спиннингом
               с плота, а верхом на лошади голод не идёт вовсе.</p>`,
@@ -1377,7 +1725,7 @@ function worldTurn(done){
   if(endless){
     if(round>survRecord()) survSave(round);      // рекорд копится по ходу: конца-то нет
     if(round%6===0) growTrees();
-    if(round%15===0 && beasts.filter(b=>b.kind==="wolf").length<6){
+    if(round%15===0 && beasts.filter(b=>b.kind==="wolf").length<2){
       const t=P.find(q=>q.alive);
       if(t && spawnBeast("wolf", t.x, t.y)) say("Где-то завыли: в лесу стало на одного волка больше.");
     }
@@ -1430,8 +1778,8 @@ function stepMover(m, next){
   if(blocked){
     say("Движущаяся стена прижала игрока "+victim.name+" — деваться было некуда.");
     notify(victim,"Движущаяся стена",
-      `<p class="findrow">${MOVER}</p><p>Стена прижала <b>${victim.name}</b> к стене. Минус одна жизнь.</p>`,
-      ()=>death(victim,"стена",next));
+      `<p class="findrow">${MOVER}</p><p>Стена прижала <b>${victim.name}</b> к стене. ${DEATHCOST(victim)}</p>`,
+      ()=>hurt(victim,"стена",next));
     return;
   }
   victim.prev={x:nx,y:ny};
@@ -1441,8 +1789,9 @@ function stepMover(m, next){
   const tc=C(px,py);
   if(tc.t==="spikes" && !tc.ladder){
     notify(victim,"Движущаяся стена",
-      `<p class="findrow">${MOVER}🔺</p><p>Стена столкнула <b>${victim.name}</b> прямо на шипы.</p>`,
-      ()=>death(victim,"шипы",next));
+      `<p class="findrow">${MOVER}🔺</p><p>Стена столкнула <b>${victim.name}</b> прямо на шипы.
+         ${DEATHCOST(victim)}</p>`,
+      ()=>hurt(victim,"шипы",next));
     return;
   }
   if(tc.t==="pit" && !tc.ladder){
@@ -1463,25 +1812,30 @@ function beastOk(b,x,y){
   return t!=="water" && t!=="pit" && t!=="spikes" && !BLOCKER[t];
 }
 
+/* зверь чует добычу только вблизи: дальше SENSE клеток он просто бродит */
 function huntTarget(b){
   let best=null, bd=1e9;
   for(const q of P){
     if(!q.alive || !inHome(b,q.x,q.y) || !beastOk(b,q.x,q.y)) continue;
     const d=Math.abs(q.x-b.x)+Math.abs(q.y-b.y);
+    if(d>SENSE) continue;
     if(d<bd){ bd=d; best=q; }
   }
   return best;
 }
 
-/* первый шаг кратчайшего пути к добыче, не выходя из своей области */
-function beastPath(b, prey){
+/* кратчайший путь к добыче, не выходя из своей области.
+   thruWalls — считать поставленные стены проходимыми: так видно, что именно мешает. */
+function beastWay(b, prey, thruWalls){
   const prev=new Map(), seen=new Set([key(b.x,b.y)]);
   const q=[[b.x,b.y]];
   for(let h=0; h<q.length; h++){
     const [x,y]=q[h];
     if(x===prey.x && y===prey.y) break;
     for(let d=0;d<4;d++){
-      const v=edgeVal(x,y,d);
+      const own=wallOn(x,y,d);
+      if(own==="door") continue;                  // дверь зверю не открыть никак
+      const v=own && thruWalls ? 0 : edgeVal(x,y,d);
       if(v===1 || v===2) continue;
       const [nx,ny]=stepXY(x,y,d);
       const kk=key(nx,ny);
@@ -1491,44 +1845,83 @@ function beastPath(b, prey){
       seen.add(kk); prev.set(kk,[x,y]); q.push([nx,ny]);
     }
   }
-  let step=[prey.x,prey.y];
-  if(!prev.has(key(step[0],step[1]))) return null;
-  for(let guard=0; guard<W*H; guard++){
-    const p=prev.get(key(step[0],step[1]));
+  if(!prev.has(key(prey.x,prey.y))) return null;
+  const path=[]; let cx=prey.x, cy=prey.y;
+  for(let guard=0; guard<4000; guard++){
+    path.unshift([cx,cy]);
+    const p=prev.get(key(cx,cy));
     if(!p) return null;
-    if(p[0]===b.x && p[1]===b.y) return step;
-    step=p;
+    if(p[0]===b.x && p[1]===b.y) return path;      // path[0] — первый шаг зверя
+    cx=p[0]; cy=p[1];
   }
   return null;
+}
+
+/* первый шаг кратчайшего пути к добыче */
+function beastPath(b, prey){
+  const w=beastWay(b,prey,false);
+  return w ? w[0] : null;
 }
 
 /* с любого убитого существа на землю падает мясо */
 function dropMeat(x,y){ C(x,y).items.push("meat"); }
 
-/* коза мирная: игрока не трогает и за ним не ходит, только бродит */
-function meetGoat(pl, g, done){
-  const shoo=()=>{ stepBeast(g, ()=>{}); stepBeast(g, ()=>{}); done(); };
-  if(!weapon(pl)){
-    say("Коза шарахнулась от "+pl.name+": голыми руками её не взять.");
-    shoo(); return;
+/* 4 — «здесь»: и рубят, и режут не только по сторонам, но и под собой */
+const aimXY   = (pl,d) => d===4 ? [pl.x,pl.y] : stepXY(pl.x,pl.y,d);
+const AIMNAME = d => d===4 ? "здесь" : DIRNAME[d];
+
+/* Коза мирная: сама не нападает и за игроком не ходит. Зарезать её —
+   отдельное действие по кнопке, как срубить дерево, и стоит это хода. */
+function actGoat(d){
+  const pl=P[cur];
+  const [nx,ny]=aimXY(pl,d);
+  const g=beastAt(nx,ny);
+  if(!g || g.kind!=="goat" || !weapon(pl)) return;
+  const i=beasts.indexOf(g); if(i>=0) beasts.splice(i,1);
+  dropMeat(nx,ny);
+  remember(pl,nx,ny);
+  say(pl.name+" зарезал козу ("+AIMNAME(d)+") — "+weaponName(pl).toLowerCase()+
+      ". На земле осталось мясо.");
+  render();
+  endTurn();
+}
+
+/* ===================== поводок =====================
+   Привязанное животное живёт своей жизнью только до поводка: дальше оно
+   не охотится и не удирает, а просто тянется за хозяином и встаёт рядом. */
+const ownerOf = a => (a.tamed==null) ? null : (P.find(q=>q.id===a.tamed && q.alive) || null);
+
+function followStep(a, ok){
+  const pl=ownerOf(a);
+  if(!pl) return;
+  const dist=Math.abs(a.x-pl.x)+Math.abs(a.y-pl.y);
+  if(dist<=1) return;                              // уже у ноги — стоит смирно
+  const free=(x,y)=> inB(x,y) && ok(x,y) && !P.some(q=>q.alive && q.x===x && q.y===y)
+                     && !moverAt(x,y) && !beastAt(x,y) && !horseAt(x,y);
+  let step=null;
+  if(a.kind){                                      // зверь умеет искать дорогу
+    const s=beastPath(a,pl);
+    if(s && free(s[0],s[1])) step=s;
   }
-  ask(pl,"Коза",
-    `<p class="findrow">🐐</p>
-     <p>Коза смирная — не бодается и не убегает далеко. С оружием (${weaponName(pl)})
-        её можно зарезать, останется мясо.</p>`,
-    [{label:"Зарезать", main:true, cb:()=>{
-        closeModal();
-        const i=beasts.indexOf(g); if(i>=0) beasts.splice(i,1);
-        dropMeat(pl.x,pl.y);
-        remember(pl,pl.x,pl.y);
-        say(pl.name+" зарезал козу: на земле осталось мясо.");
-        render();
-        done();
-      }},
-     {label:"Не трогать", cb:()=>{ closeModal(); shoo(); }}], 0);
+  if(!step){                                       // лошадь и тупики — шагом напрямик
+    let bd=dist;
+    for(let d=0;d<4;d++){
+      const v=edgeVal(a.x,a.y,d);
+      if(v===1 || v===2 || wallBar(a.x,a.y,d)) continue;
+      const [nx,ny]=stepXY(a.x,a.y,d);
+      if(!free(nx,ny)) continue;
+      const dd=Math.abs(nx-pl.x)+Math.abs(ny-pl.y);
+      if(dd<bd){ bd=dd; step=[nx,ny]; }
+    }
+  }
+  if(step){ a.x=step[0]; a.y=step[1]; }
 }
 
 function stepBeast(b, next){
+  if(b.tamed!=null){                               // на поводке зверь никого не трогает
+    followStep(b, (x,y)=>beastOk(b,x,y));
+    next(); return;
+  }
   // раненый зверь пять ходов удирает и никого не трогает
   if(b.flee>0){
     b.flee--;
@@ -1537,12 +1930,17 @@ function stepBeast(b, next){
     next(); return;
   }
   const prey = b.kind==="goat" ? null : huntTarget(b);   // коза ни за кем не ходит
-  let moved=false;
+  let moved=false, hidden=false;
   if(prey){
-    const s=beastPath(b,prey);                 // кратчайший путь, если он есть
+    let s=beastPath(b,prey);                   // кратчайший путь, если он есть
+    if(s) b.gnaw=null;                         // дорога открыта — грызть нечего
+    else {
+      s=wallHunt(b,prey);                      // дорогу перекрыла поставленная стена
+      if(!s && !b.gnaw) hidden=true;           // не учуял — бродит, будто никого нет
+    }
     if(s){ b.x=s[0]; b.y=s[1]; moved=true; }
-  }
-  if(!moved){
+  } else b.gnaw=null;
+  if(!moved && !b.gnaw){
     // пути нет или добычи не видно — зверь всё равно не стоит столбом
     const opts=[];
     for(let d=0;d<4;d++){
@@ -1553,7 +1951,7 @@ function stepBeast(b, next){
     }
     if(opts.length){
       let best=opts[rnd(opts.length)];
-      if(prey){                                // ломится в сторону добычи напрямик
+      if(prey && !hidden){                     // ломится в сторону добычи напрямик
         let bd=1e9;
         opts.forEach(s=>{
           const dd=Math.abs(s[0]-prey.x)+Math.abs(s[1]-prey.y);
@@ -1565,6 +1963,42 @@ function stepBeast(b, next){
   }
   const victim = b.kind==="goat" ? null : P.find(q=>q.alive && q.x===b.x && q.y===b.y);
   if(victim) beastFight(b,victim,next); else next();
+}
+
+/* Добыча за стеной. Запаха сквозь доски нет: обычно зверь просто не знает,
+   что там кто-то есть. Но раз в ход он может учуять (SMELL) — и тогда идёт
+   к стене и грызёт её GNAW ходов. Каменную не берут ни зубы, ни когти. */
+function wallHunt(b, prey){
+  const way=beastWay(b,prey,true);
+  if(!way){ b.gnaw=null; return null; }
+
+  // идём по найденному пути и ищем первую грань с поставленной стеной
+  let px=b.x, py=b.y, hit=null, at=-1;
+  for(let i=0;i<way.length;i++){
+    const [nx,ny]=way[i];
+    const d=DIRS.findIndex(v=>v[0]===nx-px && v[1]===ny-py);
+    if(d>=0 && wallBar(px,py,d)){ hit={id:edgeId(px,py,d), kind:wallOn(px,py,d)}; at=i; break; }
+    px=nx; py=ny;
+  }
+  if(!hit){ b.gnaw=null; return null; }        // мешает не стена, а что-то ещё
+
+  if(!b.gnaw || b.gnaw.id!==hit.id){
+    if(Math.random()>=SMELL){ b.gnaw=null; return null; }   // не учуял — и ладно
+    b.gnaw={id:hit.id, turns:0};
+    say(BNAME[b.kind]+" учуял добычу за "+WNAME[hit.kind].ins+".");
+  }
+  if(hit.kind==="swall"){                      // каменную только обнюхивает
+    b.gnaw.turns=0;
+  } else {
+    b.gnaw.turns++;
+    if(b.gnaw.turns>=GNAW){
+      barriers.delete(hit.id);
+      say(BNAME[b.kind]+" прогрыз деревянную стену насквозь.");
+      b.gnaw=null;
+    } else if(b.gnaw.turns===1 || b.gnaw.turns===GNAW-3)
+      say(BNAME[b.kind]+" грызёт деревянную стену ("+b.gnaw.turns+" из "+GNAW+").");
+  }
+  return at===0 ? null : way[0];               // к стене подходит, сквозь — нет
 }
 
 const nearestPlayer=b=>{
@@ -1583,7 +2017,7 @@ function fleeStep(b){
   let best=null, bd=-1;
   for(let d=0;d<4;d++){
     const v=edgeVal(b.x,b.y,d);
-    if(v===1 || v===2) continue;
+    if(v===1 || v===2 || wallBar(b.x,b.y,d)) continue;
     const [nx,ny]=stepXY(b.x,b.y,d);
     if(!inB(nx,ny) || !inHome(b,nx,ny) || !beastOk(b,nx,ny)) continue;
     if(P.some(q=>q.alive && q.x===nx && q.y===ny)) continue;
@@ -1606,6 +2040,13 @@ const nearestOf=(list,o)=>{
 /* Лошадь не стоит на месте никогда. От людей она бежит, но на сено идёт сама;
    волка обходит в любом случае, в воду, ямы и шипы не лезет. */
 function horseStep(h){
+  if(h.tamed!=null){                                // на поводке лошадь идёт за хозяином
+    followStep(h, (x,y)=>{
+      const t=C(x,y).t;
+      return t!=="water" && t!=="pit" && t!=="spikes" && !solidAt(x,y);
+    });
+    return;
+  }
   const lure=nearestOf(P.filter(q=>q.alive && q.items.includes("hay")), h);
   const man =nearestOf(P.filter(q=>q.alive), h);
   const wolf=nearestOf(beasts.filter(b=>b.kind==="wolf"), h);
@@ -1613,11 +2054,11 @@ function horseStep(h){
   const spots=[];
   for(let d=0;d<4;d++){
     const v=edgeVal(h.x,h.y,d);
-    if(v===1 || v===2) continue;
+    if(v===1 || v===2 || wallBar(h.x,h.y,d)) continue;   // дверь лошадь тоже не откроет
     const [nx,ny]=stepXY(h.x,h.y,d);
     if(!inB(nx,ny)) continue;
     const t=C(nx,ny).t;
-    if(t==="water" || t==="pit" || t==="spikes" || BLOCKER[t]) continue;
+    if(t==="water" || t==="pit" || t==="spikes" || solidAt(nx,ny)) continue;
     if(moverAt(nx,ny) || beastAt(nx,ny) || horseAt(nx,ny)) continue;
     // на клетку с человеком идёт, только если у того есть сено
     const who=P.find(q=>q.alive && q.x===nx && q.y===ny);
@@ -1689,7 +2130,7 @@ function rideMove(pl, d){
     const [nx,ny]=stepXY(pl.x,pl.y,d);
     if(!inB(nx,ny)) break;
     const t=C(nx,ny).t;
-    if(t==="water" || t==="pit" || t==="spikes" || BLOCKER[t]){ remember(pl,nx,ny); break; }
+    if(t==="water" || t==="pit" || t==="spikes" || solidAt(nx,ny)){ remember(pl,nx,ny); break; }
     if(moverAt(nx,ny)){ remember(pl,nx,ny); break; }
     pl.known.add(k);
     pl.prev={x:pl.x, y:pl.y};
@@ -1714,8 +2155,8 @@ function beastFight(b, pl, next){
   if(!w){
     say(nm+" настиг игрока "+pl.name+", а отбиваться нечем.");
     notify(pl, nm, `<p class="findrow">${ic}</p>
-      <p>${nm} настиг игрока <b>${pl.name}</b>. Отбиваться нечем. ${DEATHCOST()}</p>`,
-      ()=>death(pl, b.kind, next));
+      <p>${nm} настиг игрока <b>${pl.name}</b>. Отбиваться нечем. ${DEATHCOST(pl)}</p>`,
+      ()=>biteHurt(b, pl, next));
     return;
   }
   const need = w===2 ? 4 : 5;            // ножом хватает четвёрки, деревяшкой нужна пятёрка
@@ -1742,14 +2183,21 @@ function beastFight(b, pl, next){
   } else {
     say(pl.name+" не отбился от "+nm.toLowerCase()+" ("+weaponName(pl)+"), кубик "+r+".");
     notify(pl, nm, `<p class="findrow">${ic}${arm}</p><p class="dice">🎲 ${r}</p>
-      <p>Отбиться не вышло: нужно было ${need} и больше. ${DEATHCOST()}
+      <p>Отбиться не вышло: нужно было ${need} и больше. ${DEATHCOST(pl)}
          Оружие остаётся при игроке.</p>`,
-      ()=>death(pl, b.kind, next));
+      ()=>biteHurt(b, pl, next));
   }
 }
 
+/* укус: раненый остаётся на месте, поэтому зверь на один ход отскакивает,
+   иначе он доедал бы игрока, не давая ему сделать ни шагу */
+function biteHurt(b, pl, next){
+  if(pl.hp>1 && beasts.includes(b)){ b.flee=1; fleeStep(b); }
+  hurt(pl, b.kind, next);
+}
+
 /* что игрок видит на клетке, в которую упёрся */
-const TWORD = {tree:"дерево", rock:"камень",
+const TWORD = {tree:"дерево", rock:"камень", hay:"луговина", flax:"лён",
                empty:"пустая клетка", pit:"яма", spikes:"яма с шипами", water:"вода",
                shop:"магазин", exit:"вертолёт", spawn:"точка возрождения"};
 function describe(x,y){
@@ -1758,6 +2206,7 @@ function describe(x,y){
   if(c.t==="pit" && c.ladder) extra.push("в ней лестница");
   if(c.t==="spikes" && c.ladder) extra.push("через них перекинута лестница");
   if(moverAt(x,y)) extra.push("её перегородила движущаяся стена");
+  if(c.bed) extra.push("на ней стоит кровать");
   if(c.coins) extra.push("монеты ("+c.coins+")");
   c.items.forEach(i=>extra.push(INAME[i]));
   return (TWORD[c.t]||"клетка") + (extra.length ? ", " + extra.join(", ") : "");
@@ -1783,7 +2232,9 @@ function move(d){
   if(k) pl.known.add(k);
 
   if(v===1 || !k){
-    say(pl.name+" упёрся в глухую стену ("+DIRNAME[d]+") и потерял ход.");
+    const own=wallOn(pl.x,pl.y,d);
+    say(pl.name+" упёрся в "+(own ? WNAME[own].acc : "глухую стену")+
+        " ("+DIRNAME[d]+") и потерял ход.");
     endTurn(); return;
   }
 
@@ -1820,9 +2271,9 @@ function move(d){
 function enter(pl,nx,ny){
   const to=C(nx,ny);
 
-  // дерево или камень поперёк дороги
-  if(BLOCKER[to.t]){
-    peek(pl,nx,ny, to.t==="tree"?"Дерево":"Камень",
+  // камень поперёк дороги
+  if(solid(to)){
+    peek(pl,nx,ny, "Камень",
          pl.name+" упёрся в "+TWORD[to.t]+" ("+DIRNAME[DIRS.findIndex(v=>v[0]===nx-pl.x&&v[1]===ny-pl.y)]+
          ") и потерял ход.");
     return;
@@ -1908,15 +2359,14 @@ function arrive(pl, skipBeast, skipHorse){
 
   if(c.t==="spikes" && !c.ladder){
     remember(pl,pl.x,pl.y);
-    say(pl.name+" в темноте наступил на шипы. Минус жизнь.");
+    say(pl.name+" в темноте наступил на шипы.");
     render();
     ask(pl,"Яма с шипами",
       `<p class="findrow">🔺</p>
-       <p><b style="color:${pl.color}">${pl.name}</b> вслепую наступил на шипы. Минус одна жизнь. ${
-         pl.lives>1 ? "Осталось жизней: "+(pl.lives-1)+", возвращение в точку возрождения."
-                    : "Жизни кончились — игрок выбывает."}</p>`,
+       <p><b style="color:${pl.color}">${pl.name}</b> вслепую наступил на шипы. ${DEATHCOST(pl)}${
+         (!endless && pl.hp<=1 && pl.lives<=1) ? " Жизни кончились — игрок выбывает." : ""}</p>`,
       [{label:"Ладно", main:true,
-        cb:()=>{ closeModal(); death(pl,"шипы"); }}], 0);
+        cb:()=>{ closeModal(); hurt(pl,"шипы"); }}], 0);
     return;
   }
   if(c.t==="pit" && !c.ladder){
@@ -1929,11 +2379,13 @@ function arrive(pl, skipBeast, skipHorse){
   // зверь на этой же клетке
   if(!skipBeast){
     const bb=beastAt(pl.x,pl.y);
-    if(bb && bb.kind==="goat"){
-      meetGoat(pl, bb, ()=>{ if(pl.alive) arrive(pl,true,skipHorse); else endTurn(); });
-      return;
+    if(bb && bb.tamed!=null){                  // на поводке зверь в драку не лезет
+      say(critterName(bb)[0].toUpperCase()+critterName(bb).slice(1)+" на поводке — тут же, рядом.");
     }
-    if(bb && bb.flee>0){                       // напуганный в драку не лезет
+    else if(bb && bb.kind==="goat"){           // коза просто стоит рядом и жуёт
+      say("Тут пасётся коза. С оружием её можно зарезать кнопкой на панели.");
+    }
+    else if(bb && bb.flee>0){                  // напуганный в драку не лезет
       say(BNAME[bb.kind]+" шарахнулся в сторону — он всё ещё боится.");
       fleeStep(bb);
     } else if(bb){
@@ -2063,14 +2515,14 @@ function actCraft(){
   const notYet=CRAFT.filter(r=>!canCraft(pl,r));
 
   const opts=ready.map(r=>({
-    label: IICON[r.id]+" "+INAME[r.id]+" — "+needText(r),
+    label: IICON[r.id]+" "+INAME[r.id]+(r.count?" ×"+r.count:"")+" — "+needText(r),
     cb: ()=>{ closeModal(); doCraft(pl,r); }
   }));
   opts.push({label:"Закрыть", main:true, cb:()=>closeModal()});
 
   ask(pl,"Верстак",
-    `<p>В рюкзаке: ${["stick","plank","stone"].map(k=>
-        IICON[k]+" "+countOf(pl,k)+" "+plural(countOf(pl,k), PLUR[k])).join(", ")}.</p>` +
+    `<p>В рюкзаке: ${MATS.filter(k=>countOf(pl,k)).map(k=>
+        IICON[k]+" "+countOf(pl,k)+" "+plural(countOf(pl,k), PLUR[k])).join(", ") || "пусто"}.</p>` +
     (notYet.length
       ? `<p>Пока не хватает материалов на: ${notYet.map(r=>INAME[r.id].toLowerCase()+" ("+needText(r)+")").join(", ")}.</p>`
       : "") +
@@ -2082,16 +2534,69 @@ function doCraft(pl, r){
   Object.keys(r.need).forEach(k=>{
     for(let i=0;i<r.need[k];i++) pl.items.splice(pl.items.indexOf(k),1);
   });
-  pl.items.push(r.id);
-  say(pl.name+" смастерил: "+INAME[r.id]+".");
+  const n=r.count||1;                             // со льна снимается сразу две нитки
+  for(let i=0;i<n;i++) pl.items.push(r.id);
+  say(pl.name+" смастерил: "+INAME[r.id]+(n>1?" ×"+n:"")+".");
   render();
-  flyToBag([{icon:IICON[r.id], name:INAME[r.id]}], ()=>endTurn());
+  flyToBag(Array.from({length:n}, ()=>({icon:IICON[r.id], name:INAME[r.id]})), ()=>endTurn());
+}
+
+/* стену ставят на свободную грань своей клетки — туда, где ничего ещё не стоит */
+function canBuild(pl,d){
+  const [nx,ny]=stepXY(pl.x,pl.y,d);
+  if(!inB(nx,ny)) return false;                   // за край поля не поставить
+  if(wallBar(pl.x,pl.y,d)) return false;
+  return edgeVal(pl.x,pl.y,d)===0;                // ни стены лабиринта, ни двери
+}
+
+function actBuild(kind, d){
+  const pl=P[cur];
+  if(!WALLS[kind] || !pl.items.includes(kind) || !canBuild(pl,d)) return;
+  pl.items.splice(pl.items.indexOf(kind),1);
+  barriers.set(edgeId(pl.x,pl.y,d), kind);
+  const k=edgeKey(pl.x,pl.y,d); if(k) pl.known.add(k);
+  say(pl.name+" поставил "+WNAME[kind].acc+" ("+DIRNAME[d]+"). "+
+      (kind==="door"  ? "Сами ходите насквозь, а зверю её не открыть и не сломать."
+       : kind==="swall" ? "Зверю её не сломать."
+                        : "Зверь учует за ней не сразу, а прогрызёт только за "+GNAW+" ходов."));
+  render();
+  endTurn();
+}
+
+/* каменной киркой стену можно разобрать — свою или чужую */
+function actBash(d){
+  const pl=P[cur];
+  if(!pl.items.includes("stonePick")) return;
+  const id=edgeId(pl.x,pl.y,d), kind=barriers.get(id);
+
+  if(!kind){                                      // не своя стена — значит, стена лабиринта
+    const ek=edgeKey(pl.x,pl.y,d);
+    const [nx,ny]=stepXY(pl.x,pl.y,d);
+    if(!ek || !inB(nx,ny) || edgeVal(pl.x,pl.y,d)!==1) return;
+    edgeSet(pl.x,pl.y,d,0);
+    pl.known.add(ek);
+    pl.items.push("stone");                       // из кладки остаётся камень
+    remember(pl,nx,ny);                           // пролом открывает вид на ту сторону
+    say(pl.name+" проломил стену ("+DIRNAME[d]+") каменной киркой. За ней: "+
+        describe(nx,ny)+".");
+    render();
+    flyToBag([{icon:IICON.stone, name:"Камень"}], ()=>endTurn());
+    return;
+  }
+
+  const back = BACK[kind];
+  barriers.delete(id);
+  beasts.forEach(b=>{ if(b.gnaw && b.gnaw.id===id) b.gnaw=null; });
+  pl.items.push(...back);                         // из пяти обратно возвращаются две
+  say(pl.name+" разобрал "+WNAME[kind].acc+" ("+DIRNAME[d]+") каменной киркой.");
+  render();
+  flyToBag(back.map(k=>({icon:IICON[k], name:INAME[k]})), ()=>endTurn());
 }
 
 /* разбить камень киркой — как срубить дерево, только нужен инструмент */
 function actMine(d){
   const pl=P[cur];
-  if(!pl.items.includes("pick")) return;
+  if(!hasPick(pl)) return;
   const [nx,ny]=stepXY(pl.x,pl.y,d);
   const c=C(nx,ny);
   if(c.t!=="rock") return;
@@ -2103,16 +2608,103 @@ function actMine(d){
   flyToBag([{icon:IICON.stone, name:"Камень"}], ()=>endTurn());
 }
 
-/* срубить соседнее дерево: клетка становится обычной землёй и больше не держит */
+/* луговину косят, лён рвут: клетка становится землёй, в рюкзак — охапка */
+function actPick(d){
+  const pl=P[cur];
+  const [nx,ny]=aimXY(pl,d);
+  const c=C(nx,ny);
+  const got=HARVEST[c.t];
+  if(!got) return;
+  c.t="empty";
+  pl.items.push(got);
+  remember(pl,nx,ny);
+  say(pl.name+" "+(got==="hay"?"накосил сена":"нарвал льна")+" ("+AIMNAME(d)+").");
+  render();
+  flyToBag([{icon:IICON[got], name:INAME[got]}], ()=>endTurn());
+}
+
+/* живое на клетке: зверь или лошадь — поводку всё равно, кого вести */
+const critterAt  = (x,y) => beastAt(x,y) || horseAt(x,y);
+const critterName= a => a.kind ? BNAME[a.kind].toLowerCase() : "лошадь";
+
+function actTie(d){
+  const pl=P[cur];
+  if(!pl.items.includes("leash")) return;
+  const [nx,ny]=aimXY(pl,d);
+  const a=critterAt(nx,ny);
+  if(!a || a.tamed!=null || a.rider) return;
+  pl.items.splice(pl.items.indexOf("leash"),1);    // поводок остаётся на животном
+  a.tamed=pl.id;
+  a.free=true;                                     // своей области у привязанного больше нет
+  a.flee=0; a.gnaw=null;
+  say(pl.name+" привязал: "+critterName(a)+" ("+AIMNAME(d)+"). Теперь она ходит следом "+
+      "и никого не трогает.");
+  render();
+  endTurn();
+}
+
+function actUntie(d){
+  const pl=P[cur];
+  const [nx,ny]=aimXY(pl,d);
+  const a=critterAt(nx,ny);
+  if(!a || a.tamed!==pl.id) return;
+  a.tamed=null;
+  pl.items.push("leash");
+  say(pl.name+" отвязал: "+critterName(a)+" ("+AIMNAME(d)+"). Поводок вернулся в рюкзак.");
+  render();
+  flyToBag([{icon:SVG_LEASH, name:"Поводок"}], ()=>endTurn());
+}
+
+/* кровать стоит на клетке и никому не мешает ходить: на ней и спят */
+const canBed = (x,y) => inB(x,y) && C(x,y).t==="empty" && !C(x,y).bed && !solidAt(x,y);
+
+function actBed(d){
+  const pl=P[cur];
+  if(!pl.items.includes("bed")) return;
+  const [nx,ny]=aimXY(pl,d);
+  if(!canBed(nx,ny)) return;
+  pl.items.splice(pl.items.indexOf("bed"),1);
+  C(nx,ny).bed=true;
+  remember(pl,nx,ny);
+  say(pl.name+" поставил кровать ("+AIMNAME(d)+"). Чтобы она стала точкой возрождения, "+
+      "надо встать на неё и поспать.");
+  render();
+  endTurn();
+}
+
+function actSleep(){
+  const pl=P[cur];
+  if(!C(pl.x,pl.y).bed) return;
+  pl.spawn={x:pl.x, y:pl.y};
+  say(pl.name+" поспал на кровати: теперь возрождается здесь.");
+  render();
+  endTurn();
+}
+
+function actUnbed(){
+  const pl=P[cur];
+  const c=C(pl.x,pl.y);
+  if(!c.bed) return;
+  c.bed=false;
+  pl.items.push("bed");
+  remember(pl,pl.x,pl.y);
+  say(pl.name+" свернул кровать и убрал в рюкзак."+
+      (pl.spawn.x===pl.x && pl.spawn.y===pl.y
+        ? " Возрождаться он всё равно будет на этом месте, пока не поспит в другом." : ""));
+  render();
+  flyToBag([{icon:SVG_BED, name:"Кровать"}], ()=>endTurn());
+}
+
+/* срубить дерево рядом или то, под которым стоишь: клетка становится землёй */
 function actChop(d){
   const pl=P[cur];
-  const [nx,ny]=stepXY(pl.x,pl.y,d);
+  const [nx,ny]=aimXY(pl,d);
   const c=C(nx,ny);
   if(c.t!=="tree") return;
   c.t="empty";
   pl.items.push("stick","plank");                 // с каждого дерева палка и доска
   remember(pl,nx,ny);
-  say(pl.name+" срубил дерево ("+DIRNAME[d]+"): путь свободен, в рюкзаке палка и доска.");
+  say(pl.name+" срубил дерево ("+AIMNAME(d)+"): в рюкзаке палка и доска.");
   render();
   flyToBag([{icon:IICON.stick,name:"Палка"},{icon:IICON.plank,name:"Доска"}], ()=>endTurn());
 }
@@ -2145,8 +2737,12 @@ function actEat(kind){
   const was=pl.food;
   pl.food=Math.min(params.food, pl.food+FOOD[kind]);
   const what=INAME[kind].toLowerCase();
-  if(pl.food===was) say(pl.name+" съел "+what+", хотя и так был сыт.");
-  else say(pl.name+" съел "+what+", полосок стало: "+pl.food+".");
+  if(pl.food!==was) say(pl.name+" съел "+what+", полосок стало: "+pl.food+".");
+  else if(pl.hp<HP_MAX){            // сыт по горло — лишняя еда заживляет рану
+    pl.hp++;
+    say(pl.name+" съел "+what+" на полный желудок и подлечился: здоровья "+pl.hp+" из "+HP_MAX+".");
+  }
+  else say(pl.name+" съел "+what+", хотя был и сыт, и здоров.");
   endTurn();
 }
 
@@ -2370,7 +2966,23 @@ function spoils(win,lose){
     ()=>{ const k=opts.findIndex(o=>o.label.includes("Нож")); return k>=0?k:0; });
 }
 
-/* ===================== смерть и конец ===================== */
+/* ===================== урон, смерть и конец ===================== */
+/* Любая рана сперва съедает сердце: игрок остаётся на месте и при вещах.
+   Когда сердец не осталось — обычная гибель, и здоровье снова полное. */
+function hurt(pl,reason,next){
+  pl.hp--;
+  if(pl.hp>0){
+    if(reason==="голод"){ pl.food=params.food; pl.steps=0; }   // иначе голод бьёт каждый ход
+    if(reason==="яма") pl.stuckTurns=0;                        // ещё три хода на подъём
+    say(pl.name+" ранен, здоровье: "+pl.hp+" из "+HP_MAX+". Вещи при нём, с места не сдвинулся.");
+    render();
+    (next || endTurn)();
+    return;
+  }
+  pl.hp=HP_MAX;
+  death(pl,reason,next);
+}
+
 function death(pl,reason,next){
   // погиб в яме — рюкзак остаётся наверху, на клетке, с которой игрок туда шагнул
   const drop = (reason==="яма" && inB(pl.prev.x,pl.prev.y)) ? pl.prev : {x:pl.x, y:pl.y};
@@ -2387,6 +2999,7 @@ function death(pl,reason,next){
   }
   if(pl.riding) dismount(pl, "Лошадь без седока ускакала.");
   pl.onRaft=false; pl.stuck=false; pl.stuckTurns=0;
+  pl.hp=HP_MAX;                            // в схватку тоже входят с полным здоровьем
   if(!endless) pl.lives--;                 // в лесу жизни не кончаются
   if(!endless && pl.lives<=0){
     pl.alive=false;
@@ -2396,7 +3009,8 @@ function death(pl,reason,next){
     pl.x=pl.spawn.x; pl.y=pl.spawn.y; pl.prev={x:pl.x, y:pl.y};
     pl.food=params.food; pl.steps=0;          // возродился сытым
     remember(pl,pl.x,pl.y);
-    say(pl.name+" возродился. Жизней осталось: "+pl.lives+".");
+    say(pl.name+" возродился, здоровье снова полное."+
+        (endless ? "" : " Жизней осталось: "+pl.lives+"."));
   }
   (next || endTurn)();
 }
@@ -2407,6 +3021,7 @@ function finish(winner){
   if(endless){
     const best=survRecord(), rec=round>best;
     if(rec) survSave(round);
+    survDrop();                                   // продолжать уже нечего
     say("Выживание окончено на раунде "+round+".");
     modal("Выживание окончено",
       `<p class="findrow">🌲🐺</p>
@@ -2431,6 +3046,12 @@ function toSetup(){
   document.getElementById("game").hidden=true;
   document.getElementById("editor").hidden=true;
   document.getElementById("setup").hidden=false;
+  showResume();
+}
+/* кнопка «продолжить» показывается, только если сохранённая вылазка есть */
+function showResume(){
+  const b=document.getElementById("survon");
+  if(b) b.hidden=!survHas();
 }
 
 /* ===================== модалка ===================== */
@@ -2483,8 +3104,8 @@ const TOOLS=[
   {id:"empty", ic:`<i class="sw sw-grass"></i>`, name:"Земля", hint:"обычная проходимая клетка"},
   {id:"water", ic:`<i class="sw sw-water"></i>`, name:"Вода", hint:"пройти можно только на плоту"},
   {id:"pit",   ic:"🕳",                      name:"Яма",     hint:"держит, пока не найдётся лестница"},
-  {id:"spikes",ic:"🔺",                      name:"Шипы",    hint:"минус жизнь, если наступить вслепую"},
-  {id:"shop",  ic:"🏪",                      name:"Магазин", hint:"лестница, плот, труба и нож"},
+  {id:"spikes",ic:"🔺",                      name:"Шипы",    hint:"минус сердце, если наступить вслепую"},
+  {id:"shop",  ic:"🏪",                      name:"Магазин", hint:"лестница, плот, труба, нож и кирка"},
   {id:"exit",  ic:"🚁",                      name:"Вертолёт",hint:"точка выхода, повторный клик по другой клетке переносит"},
   {id:"spawn", ic:"🏠",                      name:"Старт",   hint:"точка возрождения, повторный клик убирает"},
   {id:"coin",  ic:SVG_COIN,                 name:"Монета",  hint:"каждый клик добавляет ещё одну"},
@@ -2846,9 +3467,9 @@ function mapStoreSet(obj){
 const TA_STYLE="width:100%;height:120px;background:#11161f;color:#cfe0f5;"+
                "border:1px solid #2a3647;border-radius:8px;padding:8px;font:12px monospace";
 
-function mapListHTML(store, action){
+function mapListHTML(store, action, empty){
   const names=Object.keys(store);
-  if(!names.length) return `<p>Сохранённых карт пока нет.</p>`;
+  if(!names.length) return `<p>${empty||"Сохранённых карт пока нет."}</p>`;
   return `<div id="maplist">` + names.map(n=>{
     const size=Math.round(store[n].length/1024*10)/10;
     return `<div class="row" style="gap:8px;margin:6px 0">
@@ -2858,16 +3479,82 @@ function mapListHTML(store, action){
   }).join("") + `</div><p style="margin-top:10px">${action}</p>`;
 }
 
-function wireMapList(store, onPick, redraw){
+function wireMapList(store, onPick, redraw, save){
+  const put = save || mapStoreSet;               // полка вылазок хранится отдельно
   document.querySelectorAll("[data-pick]").forEach(b=>{
     b.onclick=()=>onPick(decodeURIComponent(b.dataset.pick));
   });
   document.querySelectorAll("[data-del]").forEach(b=>{
     b.onclick=()=>{
       const n=decodeURIComponent(b.dataset.del);
-      delete store[n]; mapStoreSet(store); redraw();
+      delete store[n]; put(store); redraw();
     };
   });
+}
+
+/* --- полка сохранённых вылазок: та же механика, что у полки карт --- */
+const SURV_SLOTS="labirint-survival-saves";
+function survSlots(){
+  try{ return JSON.parse(localStorage.getItem(SURV_SLOTS)||"{}") || {}; }catch(e){ return {}; }
+}
+function survSlotsSet(o){
+  try{ localStorage.setItem(SURV_SLOTS, JSON.stringify(o)); return true; }catch(e){ return false; }
+}
+const NAME_STYLE="flex:1;background:#11161f;color:#e8edf5;border:1px solid #2a3647;"+
+                 "border-radius:8px;padding:7px 10px;font:inherit";
+
+function saveSurvDialog(){
+  if(!endless){ alert("Сохраняется только выживание."); return; }
+  const store=survSlots();
+  const text=JSON.stringify(survPack());
+  const draw=()=>{
+    const def="Вылазка "+(Object.keys(store).length+1)+" (раунд "+round+")";
+    modal("Сохранить вылазку",
+      `<p>Имя для этой вылазки:</p>
+       <div class="row" style="gap:8px"><input id="survname" value="${def}" style="${NAME_STYLE}">
+         <button id="survput" class="main">Сохранить</button></div>
+       ${Object.keys(store).length ? "<p>Уже сохранены — клик по имени перезапишет вылазку этой:</p>" : ""}
+       ${mapListHTML(store,"Та же вылазка текстом — скопируйте, если хотите сложить в файл:",
+                     "Сохранённых вылазок пока нет.")}
+       <textarea id="survtext" style="${TA_STYLE}"></textarea>`,
+      [{label:"Готово", main:true, cb:()=>closeModal()}]);
+    document.getElementById("survtext").value=text;
+    document.getElementById("survput").onclick=()=>{
+      const name=(document.getElementById("survname").value||"").trim();
+      if(!name) return;
+      store[name]=text;
+      if(!survSlotsSet(store)) alert("Браузер не дал сохранить. Скопируйте текст ниже в файл.");
+      else say("Вылазка сохранена: "+name+".");
+      draw();
+    };
+    wireMapList(store, n=>{ store[n]=text; survSlotsSet(store); draw(); }, draw, survSlotsSet);
+  };
+  draw();
+}
+
+function loadSurvDialog(){
+  const store=survSlots();
+  const draw=()=>{
+    modal("Загрузить выживание",
+      mapListHTML(store,"Или вставьте текст вылазки и нажмите «Загрузить из текста»:",
+                  "Сохранённых вылазок пока нет.") +
+      `<textarea id="survtext" style="${TA_STYLE}"></textarea>`,
+      [{label:"Загрузить из текста", main:true, cb:()=>{
+          const txt=(document.getElementById("survtext").value||"").trim();
+          if(txt) survApplyText(txt);
+        }},
+       {label:"Отмена", cb:()=>closeModal()}]);
+    wireMapList(store, n=>survApplyText(store[n]), draw, survSlotsSet);
+  };
+  draw();
+}
+
+function survApplyText(txt){
+  let d=null;
+  try{ d=JSON.parse(txt); }catch(e){}
+  if(!d || !d.players || !d.players.length){ alert("Это не похоже на сохранённую вылазку."); return; }
+  closeModal();
+  survApply(d);
 }
 
 function saveMapDialog(){
@@ -3172,6 +3859,8 @@ document.addEventListener("keydown",e=>{
   }
 });
 document.getElementById("again").onclick=toSetup;
+document.getElementById("survsave").onclick=saveSurvDialog;
+document.getElementById("survload").onclick=loadSurvDialog;
 document.getElementById("watchbtn").onclick=()=>{
   watch=!watch;
   document.getElementById("watchbtn").innerHTML = watch ? "👁 Вернуть вслепую" : "👁 Смотреть за полем";
@@ -3219,7 +3908,14 @@ function readParams(){
 }
 
 document.getElementById("start").onclick   = ()=>newGame(readParams());
-document.getElementById("surv").onclick    = ()=>startSurvival(readParams());
+document.getElementById("surv").onclick    = ()=>{
+  if(!survHas()){ startSurvival(readParams()); return; }
+  modal("Новое выживание",
+    `<p>Сохранённая вылазка пока цела. Если начать новую, она сотрётся.</p>`,
+    [{label:"Начать новую", main:true, cb:()=>{ closeModal(); startSurvival(readParams()); }},
+     {label:"Продолжить старую", cb:()=>{ closeModal(); survResume(); }}]);
+};
+document.getElementById("survon").onclick  = survResume;
 document.getElementById("netopen").onclick = ()=>{
   const c=document.getElementById("netcard");
   c.hidden=!c.hidden;
@@ -3243,7 +3939,9 @@ document.getElementById("edrandom").onclick= ()=>{
 document.getElementById("edback").onclick  = ()=>{
   document.getElementById("editor").hidden=true;
   document.getElementById("setup").hidden=false;
+  showResume();
 };
+showResume();                                 // при загрузке страницы тоже
 /* если что-то всё же сломается, пусть это будет видно в журнале, а не в пустом экране */
 window.addEventListener("error", e=>{
   try{ say("Сбой в игре: "+e.message); }catch(_){}
