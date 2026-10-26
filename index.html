@@ -221,6 +221,11 @@
         <input type="checkbox" id="netplay" checked style="vertical-align:-2px"> я тоже играю</label>
       <span class="legend">без галочки вы только ведущий: считаете партию, поля не видите</span>
     </div>
+    <div class="row" style="margin-bottom:4px">
+      <label style="width:auto;color:var(--ink)">
+        <input type="checkbox" id="netsurv" style="vertical-align:-2px"> 🌲 выживание вместо лабиринта</label>
+      <span class="legend">общий бесконечный лес: у каждого своя поляна, но мир один</span>
+    </div>
     <div class="row">
       <button class="main" id="nethost">Создать партию</button>
       <span style="color:var(--dim)">или</span>
@@ -3751,7 +3756,8 @@ function hostStart(){
   net.hostPlays=plays;
   p.bots=0;                                  // по сети играют люди
   document.getElementById("netcard").hidden=true;
-  newGame(p);
+  if(document.getElementById("netsurv").checked) startSurvival(p);
+  else newGame(p);
 }
 
 /* каждому удалённому игроку — его собственный вид, и ничего больше */
