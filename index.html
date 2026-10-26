@@ -1,0 +1,3253 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лабиринт</title>
+<style>
+  :root{
+    --bg:#11151c; --panel:#171e28; --line:#232d3b; --ink:#e8edf5; --dim:#8c9cb3;
+    --unknown:#141a23; --known:#1e2733; --here:#2d4260; --accent:#4da3ff;
+    --wall:#9db2cf; --door:#e0a44a; --dooropen:#5fbf7a;
+    --grass:
+      repeating-linear-gradient(66deg, rgba(126,176,96,.17) 0 1px, transparent 1px 5px),
+      repeating-linear-gradient(-58deg, rgba(104,152,82,.13) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(94deg, rgba(150,196,120,.08) 0 1px, transparent 1px 11px);
+    --waves:
+      repeating-linear-gradient(8deg, rgba(134,203,255,.20) 0 2px, transparent 2px 7px),
+      repeating-linear-gradient(-8deg, rgba(86,160,224,.14) 0 2px, transparent 2px 10px);
+    --bricks: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16'%3E%3Cg fill='none' stroke='%23331d15' stroke-width='2'%3E%3Cpath d='M0 8h24M0 16h24M12 0v8M0 8v8M24 8v8'/%3E%3C/g%3E%3C/svg%3E");
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}   /* иначе display:flex у секций перебивает атрибут */
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.45 "Segoe UI",system-ui,sans-serif}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:16px;margin:18px 0 8px;color:var(--dim);font-weight:600}
+  button{font:inherit;color:var(--ink);background:#243143;border:1px solid #33445c;
+         border-radius:8px;padding:7px 12px;cursor:pointer}
+  button:hover:not(:disabled){background:#2e3f57}
+  button:disabled{opacity:.4;cursor:default}
+  button.main{background:var(--accent);border-color:var(--accent);color:#07121f;font-weight:600}
+  button.main:hover{background:#6fb6ff}
+  input[type=range]{width:160px;vertical-align:middle}
+  .wrap{max-width:1120px;margin:0 auto;padding:20px 16px 40px}
+
+  /* --- настройка --- */
+  .row{display:flex;align-items:center;gap:10px;margin:10px 0}
+  .row label{width:190px;color:var(--dim)}
+  .row output{width:80px;font-variant-numeric:tabular-nums}
+
+  /* --- игра --- */
+  #game{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  #boardbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  #board, #board2{display:grid;gap:0;user-select:none}
+  .cell{display:flex;align-items:center;justify-content:center;position:relative;
+        border:3px solid transparent;background:var(--unknown);
+        box-shadow:inset 0 0 0 1px #1a2230;font-size:calc(var(--cs) * .5);line-height:1;
+        overflow:hidden}
+  .cell.known{background:var(--known)}
+  .cell.known .ic{opacity:.62}
+  /* земля и вода заливают клетку целиком: травка и рябь из градиентов */
+  .cell.t-empty, .cell.t-spawn, .sw-grass{background-color:#1e2a1c;background-image:var(--grass)}
+  .cell.t-water, .sw-water{background-color:#13334f;background-image:var(--waves)}
+  .sw{display:inline-block;width:15px;height:15px;border-radius:3px;
+      vertical-align:-3px;border:1px solid #2b3747}
+  .cell.t-pit{background:#1a2029}
+  .cell.t-spikes{background:#3a2024}
+  .cell.t-shop{background:#2b2442}
+  .cell.t-exit{background:#1f3d2b}
+  .cell.t-spawn{background-color:#2b2a1d}
+  .cell.t-tree{background-color:#1a2a18;background-image:var(--grass)}
+  .cell.t-rock{background-color:#2a2e33}
+  /* движущаяся стена занимает клетку целиком, кирпичом — поверх любого ландшафта */
+  .cell.mover{background-color:#8a5340;background-image:var(--bricks);background-size:21px 14px}
+  .sw-brick{background-color:#8a5340;background-image:var(--bricks);background-size:15px 10px}
+  .cell.moverpath{box-shadow:inset 0 0 0 2px rgba(190,120,88,.45)}
+  .cell.here .ic{opacity:1}   /* своя клетка просто в полную яркость, без рамки */
+  .cell.pick{cursor:crosshair;box-shadow:inset 0 0 0 2px #e0a44a}
+  .cell.zone{outline:1px dashed rgba(255,123,90,.5);outline-offset:-4px}
+  .cell.zone-on{outline:2px solid rgba(255,140,100,.95);outline-offset:-3px;
+                background-color:rgba(255,123,90,.14)}
+
+  /* --- палитра редактора --- */
+  #palette{display:flex;flex-wrap:wrap;gap:7px}
+  .tile{width:72px;height:64px;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;gap:4px;padding:4px;border:1px solid #33445c;border-radius:9px;
+        background:#1b2433;cursor:pointer;font:11px/1.1 inherit;color:var(--dim);text-align:center}
+  .tile .big{font-size:21px;line-height:1;height:22px;display:flex;align-items:center}
+  .tile:hover{background:#263348}
+  .tile.on{border-color:var(--accent);background:#20334d;color:var(--ink);
+           box-shadow:0 0 0 1px var(--accent)}
+  #board2 .cell:hover{cursor:pointer}
+  .cell.pw-t{border-top-color:var(--accent);border-top-style:solid}
+  .cell.pw-r{border-right-color:var(--accent);border-right-style:solid}
+  .cell.pw-b{border-bottom-color:var(--accent);border-bottom-style:solid}
+  .cell.pw-l{border-left-color:var(--accent);border-left-style:solid}
+  .cell .ic{pointer-events:none;display:inline-block}
+  .cell .ic.pop{animation:pop .45s ease-out}
+  @keyframes pop{0%{transform:scale(.3);opacity:.2}60%{transform:scale(1.3)}100%{transform:scale(1)}}
+  .flyer{position:fixed;width:36px;height:36px;font-size:30px;line-height:36px;text-align:center;
+         z-index:30;pointer-events:none;transition:transform .55s ease-in,opacity .55s ease-in}
+  .findrow{font-size:44px;line-height:1.25;margin:6px 0}
+  kbd{font:12px/1 ui-monospace,Consolas,monospace;border:1px solid currentColor;border-radius:4px;
+      padding:2px 5px;margin-left:8px;opacity:.6}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .cell .corner{position:absolute;left:1px;top:0;font-size:calc(var(--cs) * .34);opacity:.9}
+  .cell .sub{position:absolute;right:1px;bottom:0;font-size:calc(var(--cs) * .4);opacity:.95}
+  .cell .mates{position:absolute;left:1px;bottom:0;font-size:calc(var(--cs) * .4)}
+  .gi{width:1em;height:1em;display:inline-block;vertical-align:-.13em}
+  .w-t{border-top-color:var(--wall)}   .w-r{border-right-color:var(--wall)}
+  .w-b{border-bottom-color:var(--wall)}.w-l{border-left-color:var(--wall)}
+  .d-t{border-top-color:var(--door);border-top-style:dashed}
+  .d-r{border-right-color:var(--door);border-right-style:dashed}
+  .d-b{border-bottom-color:var(--door);border-bottom-style:dashed}
+  .d-l{border-left-color:var(--door);border-left-style:dashed}
+  .o-t{border-top-color:var(--dooropen);border-top-style:dotted}
+  .o-r{border-right-color:var(--dooropen);border-right-style:dotted}
+  .o-b{border-bottom-color:var(--dooropen);border-bottom-style:dotted}
+  .o-l{border-left-color:var(--dooropen);border-left-style:dotted}
+
+  #panel{flex:1;min-width:290px;max-width:400px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:14px;margin-bottom:14px}
+  .who{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:600}
+  .dot{width:14px;height:14px;border-radius:50%;flex:none}
+  .stat{display:flex;gap:16px;margin-top:8px;flex-wrap:wrap}
+  .hb{display:inline-block;width:9px;height:15px;border-radius:2px;background:#2b3747;
+      margin-right:2px;vertical-align:-2px}
+  .hb.on{background:#e0a44a}
+  .hb.low{background:#e05a4a}
+  .bag{margin-top:10px;color:var(--dim);min-height:22px}
+  .bag b{color:var(--ink);font-weight:500}
+  .hum{margin-top:10px;padding:7px 10px;border-radius:8px;background:#1d2634;color:var(--dim)}
+  .hum.near{background:#2b3a22;color:#bfe08a}
+  .hum.far{background:#2a2f1e;color:#d9d79a}
+  .pad{display:grid;grid-template-columns:repeat(3,52px);gap:6px;justify-content:center;margin:6px 0 2px}
+  .pad button{padding:9px 0}
+  .acts{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+  #log{max-height:230px;overflow:auto;font-size:14px}
+  #log div{padding:3px 0;border-bottom:1px solid #1c2531;color:var(--dim)}
+  #log div:first-child{color:var(--ink)}
+  .legend{font-size:13px;color:var(--dim)}
+  .legend span{display:inline-block;margin:2px 10px 2px 0;white-space:nowrap}
+
+  /* --- модалки --- */
+  #modal{position:fixed;inset:0;background:rgba(6,9,14,.82);display:flex;
+         align-items:center;justify-content:center;padding:20px;z-index:10}
+  #modal[hidden]{display:none}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+       padding:22px;max-width:460px;width:100%}
+  .box h3{margin:0 0 10px;font-size:19px}
+  .box p{margin:8px 0;color:var(--dim)}
+  .box .btns{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+  .dice{font-size:26px;letter-spacing:4px;margin:6px 0}
+  details{margin-top:8px}
+  summary{cursor:pointer;color:var(--dim)}
+  details p,details li{color:var(--dim);font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ================= НАСТРОЙКА ================= -->
+<section id="setup">
+  <h1>Лабиринт</h1>
+  <p class="legend">Этап 3. Всё из этапа 2 плюс подготовка к игре с разных устройств.</p>
+
+  <div class="card">
+    <div class="row"><label>Размер поля</label>
+      <input type="range" id="sz" min="5" max="30" value="12"><output id="szo">12 × 12</output></div>
+    <div class="row"><label>Число игроков</label>
+      <input type="range" id="pl" min="1" max="4" value="2"><output id="plo">2</output></div>
+    <div class="row"><label>Из них ботов</label>
+      <input type="range" id="bt" min="0" max="3" value="1"><output id="bto">1</output></div>
+    <div class="row"><label>Жизни у каждого</label>
+      <input type="range" id="lv" min="1" max="5" value="3"><output id="lvo">3</output></div>
+    <div class="row"><label>Стартовые монеты</label>
+      <input type="range" id="cn" min="0" max="10" value="0"><output id="cno">0</output></div>
+    <div class="row"><label>Полоски голода</label>
+      <input type="range" id="fd" min="0" max="8" value="5"><output id="fdo">5</output></div>
+    <div class="row"><label>Шанс поймать рыбу</label>
+      <input type="range" id="bi" min="10" max="100" step="5" value="35"><output id="bio">35 %</output></div>
+    <div class="row"><label>Слышимость вертолёта</label>
+      <input type="range" id="hr" min="0" max="5" value="3"><output id="hro">3 клетки</output></div>
+    <div class="row"><label>Открытость лабиринта</label>
+      <input type="range" id="op" min="0" max="80" value="40"><output id="opo">40 %</output></div>
+    <div class="row"><label>Волков</label>
+      <input type="range" id="wf" min="0" max="3" value="1"><output id="wfo">1</output></div>
+    <div class="row"><label>Акул</label>
+      <input type="range" id="sh" min="0" max="3" value="1"><output id="sho">1</output></div>
+    <div class="row"><label>Коз</label>
+      <input type="range" id="gt" min="0" max="4" value="2"><output id="gto">2</output></div>
+    <div class="row"><label>Движущихся стен</label>
+      <input type="range" id="mv" min="0" max="4" value="1"><output id="mvo">1</output></div>
+    <div class="row"><label>Лошадей</label>
+      <input type="range" id="ho" min="0" max="3" value="1"><output id="hoo">1</output></div>
+    <div class="row"><label>Область зверя</label>
+      <input type="range" id="ar" min="2" max="8" value="3"><output id="aro">3 клетки</output></div>
+    <div class="row">
+      <button class="main" id="start">Начать игру</button>
+      <button id="surv">🌲 Выживание</button>
+      <button id="netopen">📱 С разных устройств</button>
+      <button id="toedit">Собрать поле в редакторе</button>
+      <button id="loadmap">Загрузить карту</button>
+    </div>
+  </div>
+
+  <div class="card" id="netcard" hidden>
+    <h2 style="margin-top:0">Игра с разных устройств</h2>
+    <p class="legend">Один браузер считает партию и раздаёт каждому только его часть поля.
+       Хост держит вкладку открытой до конца.</p>
+    <div class="row" style="margin-bottom:4px">
+      <label style="width:auto;color:var(--ink)">
+        <input type="checkbox" id="netonline" checked style="vertical-align:-2px"> через интернет</label>
+      <label style="width:auto;color:var(--ink)">
+        <input type="checkbox" id="netplay" checked style="vertical-align:-2px"> я тоже играю</label>
+      <span class="legend">без галочки вы только ведущий: считаете партию, поля не видите</span>
+    </div>
+    <div class="row">
+      <button class="main" id="nethost">Создать партию</button>
+      <span style="color:var(--dim)">или</span>
+      <input id="netcode" placeholder="код" style="width:90px;background:#11161f;color:#e8edf5;
+             border:1px solid #2a3647;border-radius:8px;padding:7px 10px;font:inherit">
+      <input id="netname" placeholder="ваше имя" style="width:140px;background:#11161f;color:#e8edf5;
+             border:1px solid #2a3647;border-radius:8px;padding:7px 10px;font:inherit">
+      <button id="netjoin">Присоединиться</button>
+    </div>
+    <div id="netinfo" class="legend" style="margin-top:12px"></div>
+    <div id="netlist" class="legend" style="margin-top:8px"></div>
+    <div class="row" id="netstartrow" hidden style="margin-top:12px">
+      <button class="main" id="netstart">Начать партию</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <details open><summary>Как играть</summary>
+      <p>Вы видите только ту клетку, на которой стоите, и всё, где уже были. Соседние клетки
+         закрыты. Стену обнаруживаешь, лишь упёршись в неё, — и теряешь ход.</p>
+      <p>Цель — встать на клетку с вертолётом 🚁. Он слышен за несколько клеток, но направление
+         не выдаёт. Подзорная труба 🔭 работает один раз и открывает любые четыре клетки карты;
+         изредка валяется на поле, а в магазине 🏪 есть всегда.</p>
+      <p>Ходы: стрелки или WASD, либо кнопки на панели. Яма 🕳 держит, пока не найдётся
+         лестница или сосед; не выбрались за три хода — минус жизнь.
+         Шипы 🔺 — минус жизнь, но через уже открытые шипы можно
+         перекинуть лестницу, и она останется там мостиком. Вода проходится только на плоту 🛶,
+         и плот остаётся на воде. Дверь открывается ключом 🔑.</p>
+      <p>Голод: каждые пятнадцать ходов уходит одна полоска 🥩. Пропуск хода голод не тратит —
+         можно отсидеться. Полоску возвращает стейк: он валяется на поле или стоит 1 монету
+         в магазине, съесть его — отдельное действие. Кончились полоски — минус жизнь,
+         и возрождаешься сытым.</p>
+      <p>Рыба 🐟 стоит двух полосок, но её не купить — только поймать. Нужен спиннинг 🎣
+         (2 монеты в магазине, изредка лежит на поле) и плот: ловят, стоя прямо на воде.
+         Кнопка «Ловить рыбу» тратит ход, шанс поклёвки ведущий задаёт в настройках,
+         спиннинг не ломается.</p>
+      <p>Лошадь 🐴 всё время в движении: за ход поля уходит на две клетки, от людей удирает,
+         волка обходит стороной. Но на сено 🌾 идёт сама — носите его в рюкзаке, и лошадь
+         придёт к вам. Покормите её и садитесь верхом: десять ходов она слушается и везёт
+         по две клетки за ход туда, куда вы жмёте. Верхом не хочется есть — голод стоит.
+         В воду, ямы и шипы лошадь не пойдёт и перед ними встанет. Через десять ходов
+         сбросит и ускачет, дальше приманивайте заново.</p>
+      <p><b>Выживание</b> — отдельная кнопка на этом экране. Бесконечный лес во все стороны,
+         ни стен, ни дверей, ни вертолёта. Из ландшафта только деревья 🌳, камни и озёра;
+         ни ям, ни шипов, ни лавок. Предметов на земле нет совсем — ни еды, ни снастей,
+         ни монет. Тумана войны тоже нет: в открытом лесу видно всё вокруг.</p>
+      <p>Дерево можно <b>срубить</b>: встаньте рядом, и на панели появится «🪓 Срубить дерево»
+         для каждой соседней стороны. Уходит ход, зато клетка становится обычной землёй
+         и больше никого не держит — так пробивают дорогу сквозь чащу. С каждого срубленного
+         дерева в рюкзак падают <b>палка</b> и <b>доска</b>.</p>
+      <p>Из них на <b>верстаке</b> («🛠 Верстак» на панели, появляется, как только есть дерево)
+         собирается три вещи. <b>Деревянная кирка</b> — 2 палки и 3 доски: ею разбивают камни,
+         и с каждого разбитого камня в рюкзак идёт <b>камень</b>. <b>Деревянный меч</b> —
+         1 палка и 2 доски. <b>Каменный меч</b> — 1 палка и 2 камня.</p>
+      <p>Деревянный меч слабее ножа: от зверя спасает только на 5–6, тогда как нож и каменный
+         меч — на 4–6. В схватке игроков тот, у кого оружие сильнее, побеждает без кубика;
+         нож и каменный меч равны между собой, и тогда бросают кубик. Камня в лесу примерно
+         втрое меньше, чем деревьев, так что каменный меч — вещь не на первый день.</p>
+      <p>Жизни в лесу не кончаются: смерть забирает рюкзак и возвращает на свою поляну,
+         но выбыть из игры нельзя. Партия не заканчивается — играете, сколько хотите,
+         а счётчик раундов и рекорд растут по ходу дела.</p>
+      <p>Улететь нельзя, можно только держаться: игра считает прожитые раунды и помнит рекорд.
+         Каждые 15 раундов в лесу прибавляется волк, а каждые 6 — вокруг поднимаются новые
+         деревья, и ходить становится теснее. Вплотную к игроку дерево не вырастет.</p>
+      <p>Живое шевелится только в видимой части: волк, акула и лошадь ходят, пока они
+         у вас на экране. Отбежали достаточно далеко — зверь замирает там, где был,
+         и ждёт, пока вы снова не подойдёте. Убежать от волка в лесу можно.</p>
+      <p>Наступили на находку — игра спросит, брать её или оставить лежать. Передумали —
+         кнопка «✋ Поднять» заберёт всё с вашей клетки, но уже за отдельный ход.</p>
+      <p>Любую вещь можно выбросить на свою клетку — кнопка «🗑 Выбросить предмет».
+         Это стоит хода, зато вещь подберёт тот, кто сюда зайдёт: так передают ключ
+         напарнику или прячут ценное перед дракой.</p>
+      <p>Если препятствие можно преодолеть предметом из рюкзака, игра спросит. Отказались —
+         ход потерян, но клетку впереди вы уже разглядели: это честная разведка за один ход.</p>
+      <p>Волк 🐺 и акула 🦈 ходят по своей области. Учуяли игрока — идут к нему кратчайшим путём.
+         Без ножа 🔪 встреча — смерть. С ножом бросок кубика: 1–3 не отбился, 4–6 отбился:
+         зверь удирает и пять ходов не нападает, а после третьей победы над ним погибает совсем.
+         Нож изредка попадается на поле, а в магазине есть всегда.
+         Коза 🐐 — смирная: не нападает и за игроком не ходит. С любым оружием её можно
+         зарезать, и останется мясо 🍖 на две полоски голода. Мясо падает и с убитого
+         волка или акулы — после третьей победы над зверем. Движущаяся стена 🧱 ездит по своей дорожке и толкает,
+         а то и давит. Всё это шевелится после того, как сходили все игроки.</p>
+      <p>Зверя и движущуюся стену видно, когда они выходят на клетку, которую вы уже открыли, —
+         по знакомым коридорам за ними можно следить. Что творится в неоткрытой части поля,
+         не видно. Другие игроки по-прежнему обнаруживаются, только когда вы столкнулись
+         на одной клетке.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ================= РЕДАКТОР ================= -->
+<section id="editor" hidden>
+  <h1>Редактор поля</h1>
+  <p class="legend">Клик по объекту в палитре, потом клик по клетке поля. Поле показано целиком —
+     ровно так, как его увидят игроки, когда откроют.</p>
+  <div id="game2" style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+    <div id="boardbox2" style="background:var(--panel);border:1px solid var(--line);
+         border-radius:12px;padding:12px"><div id="board2"></div></div>
+    <aside style="flex:1;min-width:300px;max-width:400px">
+      <div class="card">
+        <div id="edsel" class="hum">Выберите объект</div>
+        <div id="palette" style="margin-top:12px"></div>
+      </div>
+      <div class="card">
+        <div id="edstat" class="legend"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="main" id="edplay">Играть</button>
+          <button id="edrandom">Заполнить случайно</button>
+          <button id="edclear">Очистить карту</button>
+          <button id="edsave">Сохранить карту</button>
+          <button id="edback">Назад к настройкам</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= ИГРА ================= -->
+<section id="game" hidden>
+  <div id="boardbox">
+    <div id="watchbar" class="hum far" hidden style="margin:0 0 10px">
+      👁 Режим наблюдателя: видно всё поле, зверей и ботов</div>
+    <div id="board"></div>
+  </div>
+  <aside id="panel">
+    <div class="card">
+      <div class="who"><span class="dot" id="pdot"></span><span id="pname">Игрок 1</span></div>
+      <div class="stat">
+        <span id="plives">❤️ 3</span><span id="pcoins">0</span><span id="pfood"></span>
+        <span id="pturn">раунд 1</span>
+      </div>
+      <div class="bag" id="pbag">Рюкзак пуст</div>
+      <div class="hum" id="phum">Гула не слышно</div>
+      <div class="pad">
+        <span></span><button data-d="0">↑</button><span></span>
+        <button data-d="3">←</button><button data-d="2">↓</button><button data-d="1">→</button>
+      </div>
+      <div class="acts" id="acts"></div>
+    </div>
+    <div class="card"><h2 style="margin-top:0">Что происходило</h2><div id="log"></div></div>
+    <div class="card legend">
+      <span>🚁 вертолёт</span><span>🏪 магазин</span><span>🕳 яма</span><span>🔺 шипы</span>
+      <span><i class="sw sw-water"></i> вода</span><span><i class="sw sw-grass"></i> земля</span>
+      <span>🏠 возрождение</span>
+      <span><svg class="gi" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="#f2c14e" stroke="#8a6a1f" stroke-width="1.5"/><circle cx="12" cy="12" r="4.6" fill="none" stroke="#8a6a1f" stroke-width="1.5"/></svg> монеты</span>
+      <span><svg class="gi" viewBox="0 0 24 24"><g fill="none" stroke="#ffd166" stroke-width="2.6" stroke-linecap="round"><path d="M6.5 2.5v19M17.5 2.5v19M6.5 7h11M6.5 12h11M6.5 17h11"/></g></svg> лестница</span>
+      <span>🔑 ключ</span><span>🛶 плот</span><span>🔭 труба</span><span>🔪 нож</span>
+      <span>🥩 стейк</span><span>🎣 спиннинг</span><span>🐟 рыба</span>
+      <span>🌾 сено</span><span>🐴 лошадь</span>
+      <span>🐺 волк</span><span>🦈 акула</span><span>🐐 коза</span><span>🍖 мясо</span>
+      <span><i class="sw sw-brick"></i> движущаяся стена</span>
+      <br><span style="color:var(--wall)">━ стена</span>
+      <span style="color:var(--door)">┄ закрытая дверь</span>
+      <span style="color:var(--dooropen)">┈ открытая дверь</span>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="again">Новая игра</button>
+        <button id="watchbtn">👁 Смотреть за полем</button>
+      </div>
+    </div>
+  </aside>
+</section>
+</div>
+
+<div id="modal" hidden><div class="box" id="mbox"></div></div>
+
+<script>
+"use strict";
+
+/* ===================== данные ===================== */
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];          // 0 вверх, 1 вправо, 2 вниз, 3 влево
+const DIRNAME = ["вверх","вправо","вниз","влево"];
+const COLORS = ["#4da3ff","#ff7b5a","#6ee7a8","#ffd166"];
+/* вода и земля узнаются по заливке клетки, значок им не нужен */
+const SVG_ROCK = `<svg class="gi" viewBox="0 0 24 24"><path d="M3.5 19.5l3.5-10L12 4.5l6.2 4.2L20.5 19.5z" fill="#8d949c" stroke="#464c54" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 9.5L12 12.2l6.2-3.5M12 12.2v7.3" fill="none" stroke="#5c636b" stroke-width="1.2"/></svg>`;
+const TICON = {empty:"",pit:"🕳",spikes:"🔺",water:"",shop:"🏪",exit:"🚁",spawn:"🏠",
+               tree:"🌳",rock:SVG_ROCK};
+const INAME = {coin:"Монеты",ladder:"Лестница",key:"Ключ",raft:"Плот",spyglass:"Подзорная труба",
+               knife:"Нож",steak:"Стейк",rod:"Спиннинг",fish:"Рыба",hay:"Сено",
+               stick:"Палка",plank:"Доска",stone:"Камень",meat:"Мясо",
+               pick:"Деревянная кирка",sword:"Деревянный меч",stoneSword:"Каменный меч"};
+const HORSE = "🐴";
+const FOOD = {steak:1, fish:2, meat:2};             // сколько полосок возвращает еда
+const bite = () => (params && params.bite ? params.bite : 35) / 100;   // шанс поклёвки
+/* монета и лестница — своей графикой: эти эмодзи есть не во всех шрифтах Windows */
+const SVG_COIN = `<svg class="gi" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2" fill="#f2c14e" stroke="#8a6a1f" stroke-width="1.5"/><circle cx="12" cy="12" r="4.6" fill="none" stroke="#8a6a1f" stroke-width="1.5"/></svg>`;
+const SVG_LADDER = `<svg class="gi" viewBox="0 0 24 24"><g fill="none" stroke="#ffd166" stroke-width="2.6" stroke-linecap="round"><path d="M6.5 2.5v19M17.5 2.5v19M6.5 7h11M6.5 12h11M6.5 17h11"/></g></svg>`;
+/* дерево в рюкзаке: палка и доска — тоже своей графикой, эмодзи для них ненадёжны */
+const SVG_STICK = `<svg class="gi" viewBox="0 0 24 24"><g stroke="#9a6b3f" stroke-width="2.6" stroke-linecap="round" fill="none"><path d="M5.5 19L18 6.5"/><path d="M12.5 12l3.6-1.2"/><path d="M10 14.5l-2.6-.6"/></g></svg>`;
+const SVG_PLANK = `<svg class="gi" viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8.5" rx="1.6" fill="#b07d4a" stroke="#6d4722" stroke-width="1.3"/><path d="M5 11.2h14M5 13.8h14" fill="none" stroke="#8a5f33" stroke-width="1"/></svg>`;
+const SVG_PICK  = `<svg class="gi" viewBox="0 0 24 24"><path d="M12 7.5V21" fill="none" stroke="#9a6b3f" stroke-width="2.6" stroke-linecap="round"/><path d="M3.2 9.8C7 5.4 17 5.4 20.8 9.8c-3.1-1.7-5.8-2.5-8.8-2.5s-5.7.8-8.8 2.5z" fill="#b07d4a" stroke="#6d4722" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+const SVG_SWORD = `<svg class="gi" viewBox="0 0 24 24"><g stroke="#6d4722" stroke-width="1.2" stroke-linejoin="round"><path d="M14.5 3.2l4 1.8-9 10.2-2.8-1.2z" fill="#c69258"/><path d="M5.4 15.6l3.2 1.4-2.1 2.8-2.6-1.1z" fill="#9a6b3f"/></g></svg>`;
+const SVG_SSWORD= `<svg class="gi" viewBox="0 0 24 24"><g stroke-width="1.2" stroke-linejoin="round"><path d="M14.5 3.2l4 1.8-9 10.2-2.8-1.2z" fill="#9aa2ab" stroke="#464c54"/><path d="M5.4 15.6l3.2 1.4-2.1 2.8-2.6-1.1z" fill="#9a6b3f" stroke="#6d4722"/></g></svg>`;
+const IICON = {coin:SVG_COIN,ladder:SVG_LADDER,key:"🔑",raft:"🛶",spyglass:"🔭",knife:"🔪",
+               steak:"🥩",rod:"🎣",fish:"🐟",hay:"🌾",meat:"🍖",
+               stick:SVG_STICK,plank:SVG_PLANK,stone:SVG_ROCK,
+               pick:SVG_PICK,sword:SVG_SWORD,stoneSword:SVG_SSWORD};
+
+/* ===================== верстак ===================== */
+const CRAFT=[
+  {id:"pick",       need:{stick:2, plank:3}},
+  {id:"sword",      need:{stick:1, plank:2}},
+  {id:"stoneSword", need:{stick:1, stone:2}}
+];
+const PLUR={stick:["палка","палки","палок"], plank:["доска","доски","досок"],
+            stone:["камень","камня","камней"]};
+function plural(n, forms){
+  const a=n%10, b=n%100;
+  if(a===1 && b!==11) return forms[0];
+  if(a>=2 && a<=4 && (b<10 || b>=20)) return forms[1];
+  return forms[2];
+}
+
+/* сила оружия: каменный меч и нож равны, деревянный слабее, пустые руки — ничто */
+const weapon = pl => (pl.items.includes("knife") || pl.items.includes("stoneSword")) ? 2
+                   : (pl.items.includes("sword") ? 1 : 0);
+const weaponName = pl => pl.items.includes("knife") ? "нож"
+  : pl.items.includes("stoneSword") ? "каменный меч"
+  : pl.items.includes("sword") ? "деревянный меч" : "голые руки";
+const weaponIcon = pl => pl.items.includes("knife") ? "🔪"
+  : pl.items.includes("stoneSword") ? SVG_SSWORD
+  : pl.items.includes("sword") ? SVG_SWORD : "✊";
+const BICON = {wolf:"🐺", shark:"🦈", goat:"🐐"};
+const BNAME = {wolf:"Волк", shark:"Акула", goat:"Коза"};
+const MOVER = "🧱";
+/* человечек в цвете игрока */
+const SVG_MAN = c => `<svg class="gi" viewBox="0 0 24 24"><g fill="${c}" stroke="#0b1018" stroke-width=".7" stroke-linejoin="round"><circle cx="12" cy="5.2" r="3.2"/><path d="M12 9.4c-2.7 0-4.5 1.5-4.5 4v3.2h2.2l.5 5.4h3.6l.5-5.4h2.2v-3.2c0-2.5-1.8-4-4.5-4z"/></g></svg>`;
+/* на воде игрок сидит в лодке */
+const SVG_BOAT = c => `<svg class="gi" viewBox="0 0 24 24"><g stroke="#0b1018" stroke-width=".7" stroke-linejoin="round"><path d="M16.5 6.5l3.5 7" stroke="#d8c08a" stroke-width="1.5" fill="none"/><circle cx="11" cy="5.6" r="2.8" fill="${c}"/><path d="M8.4 14.5c0-2 1.2-3.3 2.6-3.3s2.6 1.3 2.6 3.3v.6H8.4z" fill="${c}"/><path d="M2.6 15h18.8l-2.3 4.6a2.2 2.2 0 0 1-2 1.2H6.9a2.2 2.2 0 0 1-2-1.2z" fill="#b5793f"/></g></svg>`;
+/* кто на воде — тот в лодке, остальные пешком */
+const manIcon = q =>
+  q.riding ? `🏇<span style="font-size:.4em;vertical-align:top;color:${q.color}">●</span>`
+  : (q.onRaft || C(q.x,q.y).t==="water") ? SVG_BOAT(q.color)
+  : SVG_MAN(q.color);
+const PRICE = {steak:1, hay:1, rod:2, ladder:3, raft:4, spyglass:4, knife:5}; // рыба не продаётся
+const HUNGER_STEP = 15;                             // ходов на одну полоску голода
+
+let W=12, H=12, cells=[], eV=[], eH=[];            // поле
+let beasts=[], movers=[], horses=[];                // волки, акулы, движущиеся стены и лошади
+let P=[], cur=0, round=1, over=false, params=null; // игроки и ход
+let spyMode=null;                                   // режим подзорной трубы
+let findShow=null;                                  // клетка, где сейчас показана находка
+let watch=false;                                    // режим наблюдателя: видно всё поле
+let skipped=false;                                  // ход пропущен — голод не тратится
+let edit=null;                                      // состояние редактора
+
+const idx=(x,y)=>y*W+x;
+const rnd=n=>Math.floor(Math.random()*n);
+const key=(x,y)=>x+","+y;
+
+/* ===================== бесконечный мир (режим выживания) =====================
+   Клеток заранее нет: каждая рождается при первом обращении и дальше живёт
+   в sparse. Что в ней — считается от координат, поэтому мир один и тот же,
+   сколько по нему ни ходи. Стен нет вовсе, дорогу перекрывают деревья и камни. */
+let endless=false, sparse=new Map(), VIEW=15, lastView=null;
+
+const inB=(x,y)=> endless ? true : (x>=0 && y>=0 && x<W && y<H);
+
+function noise(x,y,salt){
+  let h=(x*374761393 + y*668265263 + salt*2246822519) | 0;
+  h=Math.imul(h ^ (h>>>13), 1274126177);
+  return ((h ^ (h>>>16)) >>> 0) / 4294967296;
+}
+
+/* озёра — круглые пятна, центр которых выпадает раз в несколько кварталов */
+function lakeAt(x,y){
+  const S=8;
+  const gx=Math.floor(x/S), gy=Math.floor(y/S);
+  for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+    const bx=gx+dx, by=gy+dy;
+    if(noise(bx,by,9)>0.3) continue;
+    const cx=bx*S+Math.floor(noise(bx,by,10)*S);
+    const cy=by*S+Math.floor(noise(bx,by,11)*S);
+    const r=2+Math.floor(noise(bx,by,12)*3);
+    if((x-cx)*(x-cx)+(y-cy)*(y-cy) <= r*r) return true;
+  }
+  return false;
+}
+
+/* В лесу из ландшафта только деревья, камни и вода: ни ям, ни шипов, ни лавок.
+   Монет и ключей тоже нет — покупать не у кого, запирать нечего. */
+function genCell(x,y){
+  const c={t:"empty", items:[], coins:0, ladder:false, spawnOf:null};
+  if(Math.abs(x)<=1 && Math.abs(y)<=1) return c;      // стартовая поляна чистая
+  if(lakeAt(x,y)){ c.t="water"; return c; }
+
+  const r=noise(x,y,1);
+  if(r<0.13) c.t="tree";
+  else if(r<0.17) c.t="rock";                         // камень втрое реже дерева
+  return c;                                           // предметов в лесу нет вовсе
+}
+
+/* лес понемногу зарастает: раз в несколько раундов вокруг игроков поднимаются деревья */
+function growTrees(){
+  const live=P.filter(q=>q.alive);
+  if(!live.length) return;
+  let planted=0;
+  for(let t=0;t<200 && planted<2;t++){
+    const who=live[rnd(live.length)];
+    const dx=rnd(17)-8, dy=rnd(17)-8;
+    if(Math.abs(dx)<=1 && Math.abs(dy)<=1) continue;
+    const x=who.x+dx, y=who.y+dy, c=C(x,y);
+    if(c.t!=="empty" || c.items.length || c.coins) continue;
+    if(beastAt(x,y) || horseAt(x,y)) continue;
+    // вплотную к игроку не растёт, чтобы никого не замуровать
+    if(P.some(q=>q.alive && Math.abs(q.x-x)<=1 && Math.abs(q.y-y)<=1)) continue;
+    c.t="tree"; planted++;
+  }
+  if(planted) say("Лес подрос: деревьев вокруг стало больше.");
+}
+
+/* единственный способ добраться до клетки — и в лабиринте, и в бесконечном мире */
+function C(x,y){
+  if(!endless) return cells[idx(x,y)];
+  const k=key(x,y);
+  let c=sparse.get(k);
+  if(!c){ c=genCell(x,y); sparse.set(k,c); }
+  return c;
+}
+
+const BLOCKER={tree:true, rock:true};                 // сквозь них не пройти
+
+/* грань между клеткой (x,y) и соседом в направлении d.
+   Значения: 0 — свободно, 1 — стена, 2 — закрытая дверь, 3 — открытая дверь. */
+function edgeRef(x,y,d){
+  if(d===0) return y<=0   ? null : {a:eH, i:y-1, j:x};
+  if(d===1) return x>=W-1 ? null : {a:eV, i:y,   j:x};
+  if(d===2) return y>=H-1 ? null : {a:eH, i:y,   j:x};
+  return             x<=0 ? null : {a:eV, i:y,   j:x-1};
+}
+/* в бесконечном мире стен нет: все грани свободны и край поля не кончается */
+function edgeVal(x,y,d){
+  if(endless) return 0;
+  const r=edgeRef(x,y,d); return r ? r.a[r.i][r.j] : 1;
+}
+function edgeSet(x,y,d,v){
+  if(endless) return;
+  const r=edgeRef(x,y,d); if(r) r.a[r.i][r.j]=v;
+}
+function edgeKey(x,y,d){
+  if(endless) return "E:"+x+":"+y+":"+d;
+  const r=edgeRef(x,y,d); if(!r) return null;
+  return (r.a===eV?"V":"H")+":"+r.i+":"+r.j;
+}
+const stepXY=(x,y,d)=>[x+DIRS[d][0], y+DIRS[d][1]];
+
+/* ===================== генерация поля ===================== */
+function grid(rows,cols,v){
+  const a=[]; for(let i=0;i<rows;i++) a.push(new Array(cols).fill(v)); return a;
+}
+
+function buildMaze(openness){
+  eV=grid(H, Math.max(W-1,0), 1);
+  eH=grid(Math.max(H-1,0), W, 1);
+  const seen=new Array(W*H).fill(false);
+  const sx=rnd(W), sy=rnd(H);
+  seen[idx(sx,sy)]=true;
+  const st=[[sx,sy]];
+  while(st.length){
+    const [x,y]=st[st.length-1];
+    const free=[];
+    for(let d=0;d<4;d++){
+      const [nx,ny]=stepXY(x,y,d);
+      if(inB(nx,ny) && !seen[idx(nx,ny)]) free.push(d);
+    }
+    if(!free.length){ st.pop(); continue; }
+    const d=free[rnd(free.length)];
+    edgeSet(x,y,d,0);
+    const [nx,ny]=stepXY(x,y,d);
+    seen[idx(nx,ny)]=true;
+    st.push([nx,ny]);
+  }
+  // лишние стены убираем, чтобы не было единственного пути
+  for(let y=0;y<H;y++) for(let x=0;x<W-1;x++)
+    if(eV[y][x]===1 && Math.random()<openness) eV[y][x]=0;
+  for(let y=0;y<H-1;y++) for(let x=0;x<W;x++)
+    if(eH[y][x]===1 && Math.random()<openness) eH[y][x]=0;
+}
+
+/* BFS по проходимым граням; blocked(x,y) — клетки, в которые нельзя войти */
+function bfs(sx,sy,blocked){
+  const prev=new Array(W*H).fill(-1), dist=new Array(W*H).fill(-1);
+  dist[idx(sx,sy)]=0;
+  const q=[[sx,sy]];
+  for(let h=0; h<q.length; h++){
+    const [x,y]=q[h];
+    for(let d=0;d<4;d++){
+      const v=edgeVal(x,y,d);
+      if(v===1 || v===2) continue;
+      const [nx,ny]=stepXY(x,y,d);
+      if(!inB(nx,ny) || dist[idx(nx,ny)]>=0) continue;
+      if(blocked && blocked(nx,ny)) continue;
+      dist[idx(nx,ny)]=dist[idx(x,y)]+1;
+      prev[idx(nx,ny)]=idx(x,y);
+      q.push([nx,ny]);
+    }
+  }
+  return {dist,prev};
+}
+
+function generate(p){
+  W=p.w; H=p.h;
+  buildMaze(p.open);
+
+  cells=[];
+  for(let i=0;i<W*H;i++) cells.push({t:"empty",items:[],coins:0,ladder:false,spawnOf:null});
+
+  // вертолёт и точки возрождения — подальше друг от друга
+  const ex=rnd(W), ey=rnd(H);
+  const far=bfs(ex,ey,null);
+  const order=[];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++)
+    if(far.dist[idx(x,y)]>0) order.push([x,y,far.dist[idx(x,y)]]);
+  order.sort((a,b)=>b[2]-a[2]);
+  if(order.length < p.players) return null;
+
+  const spawns=[];
+  for(let i=0;i<p.players;i++){
+    const pick=order[Math.min(order.length-1, Math.floor(i*order.length/(p.players*2)))];
+    if(spawns.some(s=>s[0]===pick[0]&&s[1]===pick[1])){
+      const alt=order.find(c=>!spawns.some(s=>s[0]===c[0]&&s[1]===c[1]));
+      if(!alt) return null;
+      spawns.push([alt[0],alt[1]]);
+    } else spawns.push([pick[0],pick[1]]);
+  }
+
+  C(ex,ey).t="exit";
+  spawns.forEach((s,i)=>{ const c=cells[idx(s[0],s[1])]; c.t="spawn"; c.spawnOf=i; });
+
+  // дорога от каждой точки возрождения до вертолёта — её не портим
+  const safeCell=new Set(), safeEdge=new Set();
+  for(const s of spawns){
+    const r=bfs(s[0],s[1],null);
+    if(r.dist[idx(ex,ey)]<0) return null;
+    let at=idx(ex,ey);
+    while(at>=0){
+      const x=at%W, y=(at-x)/W;
+      safeCell.add(key(x,y));
+      const pr=r.prev[at];
+      if(pr>=0){
+        const px=pr%W, py=(pr-px)/W;
+        for(let d=0;d<4;d++){
+          const [nx,ny]=stepXY(px,py,d);
+          if(nx===x&&ny===y) safeEdge.add(edgeKey(px,py,d));
+        }
+      }
+      at=pr;
+    }
+  }
+
+  // ландшафт — опасное только в стороне от защищённой дороги
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const c=C(x,y);
+    if(c.t!=="empty" || safeCell.has(key(x,y))) continue;
+    const r=Math.random();
+    if(r<0.10) c.t="water";
+    else if(r<0.15) c.t="pit";
+    else if(r<0.18) c.t="spikes";
+  }
+
+  // магазины, предметы и монеты ложатся на любую пустую клетку, дорогу тоже
+  const plain=[];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++)
+    if(C(x,y).t==="empty") plain.push([x,y]);
+  if(plain.length < 10) return null;
+
+  const take=()=>plain.splice(rnd(plain.length),1)[0];
+
+  // магазины
+  const shops=1+Math.floor(W*H/110);
+  for(let i=0;i<shops && plain.length;i++) C(...take()).t="shop";
+
+  // двери на второстепенных гранях + ключи
+  const doorSpots=[];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++) for(const d of [1,2]){
+    const k=edgeKey(x,y,d);
+    if(k && edgeVal(x,y,d)===0 && !safeEdge.has(k) && !safeCell.has(key(x,y))) doorSpots.push([x,y,d]);
+  }
+  const doors=Math.min(doorSpots.length, 1+Math.floor(W*H/120));
+  for(let i=0;i<doors;i++){
+    const s=doorSpots.splice(rnd(doorSpots.length),1)[0];
+    edgeSet(s[0],s[1],s[2],2);
+  }
+
+  // предметы на поле; сколько чего — считаем от размера
+  const put=(item,n)=>{ for(let i=0;i<n && plain.length;i++) C(...take()).items.push(item); };
+  put("key", doors+1);
+  put("ladder", 2+Math.floor(W*H/160));
+  if(cells.some(c=>c.t==="water")){ put("raft", 2); put("rod", 1+Math.floor(W*H/250)); }
+  put("knife", 1+Math.floor(W*H/200));        // редкие находки, в магазине надёжнее
+  put("spyglass", 1+Math.floor(W*H/200));
+  if(p.food) put("steak", 2+Math.floor(W*H/90));
+  if(p.horses) put("hay", 1+Math.floor(W*H/150));
+  const piles=Math.max(4, Math.round(W*H*0.10));
+  for(let i=0;i<piles && plain.length;i++) C(...take()).coins += 1+rnd(3);
+
+  // звери и движущиеся стены — всё в стороне от защищённой дороги
+  beasts=[]; movers=[]; horses=[];
+  const land=[], sea=[];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const t=C(x,y).t;
+    if(safeCell.has(key(x,y)) || t==="exit" || t==="spawn") continue;
+    if(t==="water") sea.push([x,y]); else if(t==="empty"||t==="shop") land.push([x,y]);
+  }
+  for(let i=0;i<p.wolves && land.length;i++){
+    const [x,y]=land.splice(rnd(land.length),1)[0];
+    beasts.push({kind:"wolf", x, y, home:beastHome("wolf",x,y,p.area), flee:0, hurt:0});
+  }
+  for(let i=0;i<p.sharks && sea.length;i++){
+    const [x,y]=sea.splice(rnd(sea.length),1)[0];
+    beasts.push({kind:"shark", x, y, home:beastHome("shark",x,y,p.area), flee:0, hurt:0});
+  }
+  for(let i=0;i<(p.goats||0) && land.length;i++){
+    const [x,y]=land.splice(rnd(land.length),1)[0];
+    beasts.push({kind:"goat", x, y, home:beastHome("wolf",x,y,p.area+2), flee:0, hurt:0});
+  }
+  for(let i=0;i<p.movers;i++){
+    const run=findRun(safeCell);
+    if(run) movers.push({path:run, i:0, step:1});
+  }
+  for(let i=0;i<(p.horses||0) && land.length;i++){
+    const [x,y]=land.splice(rnd(land.length),1)[0];
+    horses.push({x,y});
+  }
+
+  // последняя проверка: сухой путь без ям, шипов, воды и закрытых дверей
+  const bad=(x,y)=>{ const t=C(x,y).t; return t==="water"||t==="pit"||t==="spikes"; };
+  for(const s of spawns){
+    const r=bfs(s[0],s[1],bad);
+    if(r.dist[idx(ex,ey)]<0) return null;
+  }
+  return {spawns, exit:[ex,ey]};
+}
+
+/* прямая дорожка из 3–5 пустых клеток без стен между ними — под движущуюся стену */
+function findRun(safeCell){
+  for(let t=0;t<300;t++){
+    const x=rnd(W), y=rnd(H), d=rnd(2)?1:2, len=3+rnd(3);
+    const run=[]; let cx=x, cy=y, ok=true;
+    for(let i=0;i<len;i++){
+      if(!inB(cx,cy)){ ok=false; break; }
+      const c=C(cx,cy);
+      if(c.t!=="empty" || (safeCell && safeCell.has(key(cx,cy))) || c.items.length || c.coins){ ok=false; break; }
+      if(beasts.some(b=>b.x===cx&&b.y===cy)){ ok=false; break; }
+      if(movers.some(m=>m.path.some(s=>s[0]===cx&&s[1]===cy))){ ok=false; break; }
+      run.push([cx,cy]);
+      if(i<len-1){
+        if(edgeVal(cx,cy,d)!==0){ ok=false; break; }
+        [cx,cy]=stepXY(cx,cy,d);
+      }
+    }
+    if(ok && run.length>=3) return run;
+  }
+  return null;
+}
+
+const moverAt=(x,y)=>movers.find(m=>m.path[m.i][0]===x && m.path[m.i][1]===y) || null;
+const beastAt=(x,y)=>beasts.find(b=>b.x===x && b.y===y) || null;
+const horseAt=(x,y)=>horses.find(h=>h.x===x && h.y===y) || null;
+/* область зверя — произвольный набор клеток */
+const inHome=(b,x,y)=> b.free ? true : b.home.has(key(x,y));
+
+/* клетки, до которых от логова не больше r шагов: стены территорию ограничивают */
+function blob(x,y,r,ok){
+  const seen=new Set([key(x,y)]);
+  const q=[[x,y,0]];
+  for(let h=0; h<q.length; h++){
+    const [cx,cy,dist]=q[h];
+    if(dist>=r) continue;
+    for(let d=0;d<4;d++){
+      const v=edgeVal(cx,cy,d);
+      if(v===1 || v===2) continue;
+      const [nx,ny]=stepXY(cx,cy,d);
+      const kk=key(nx,ny);
+      if(!inB(nx,ny) || seen.has(kk)) continue;
+      if(ok && !ok(nx,ny)) continue;
+      seen.add(kk); q.push([nx,ny,dist+1]);
+    }
+  }
+  return seen;
+}
+
+/* своя территория для зверя: волку суша, акуле вода */
+function beastHome(kind,x,y,r){
+  const land=(ax,ay)=>C(ax,ay).t!=="water";
+  const sea =(ax,ay)=>C(ax,ay).t==="water";
+  return blob(x,y,r, kind==="shark" ? sea : land);
+}
+
+/* ===================== старт партии ===================== */
+function newGame(p){
+  params=p;
+  let built=null;
+  for(let tries=0; tries<80 && !built; tries++) built=generate(p);
+  if(!built){ alert("Не удалось собрать поле. Попробуйте размер побольше."); return; }
+
+  startGame(built.spawns);
+}
+
+/* ===================== режим выживания ===================== */
+/* попадает ли клетка в окно обзора хоть кого-то из живых */
+function inSight(x,y){
+  const half=(VIEW-1)/2;
+  return P.some(q=>q.alive && Math.abs(q.x-x)<=half && Math.abs(q.y-y)<=half);
+}
+
+function freeSpotNear(cx,cy,r){
+  for(let t=0;t<500;t++){
+    const x=cx+Math.round((Math.random()*2-1)*r);
+    const y=cy+Math.round((Math.random()*2-1)*r);
+    const c=C(x,y);
+    if(c.t!=="empty" || BLOCKER[c.t]) continue;
+    if(beastAt(x,y) || horseAt(x,y) || P.some(q=>q.alive && q.x===x && q.y===y)) continue;
+    return [x,y];
+  }
+  return [cx,cy];
+}
+
+function spawnBeast(kind, fromX, fromY){
+  for(let t=0;t<600;t++){
+    const a=Math.random()*Math.PI*2, d=5+Math.random()*2;   // на краю видимой части
+    const x=Math.round(fromX+Math.cos(a)*d), y=Math.round(fromY+Math.sin(a)*d);
+    const c=C(x,y);
+    const ok = kind==="shark" ? c.t==="water"
+                              : (c.t==="empty" || c.t==="shop");
+    if(!ok || beastAt(x,y)) continue;
+    beasts.push({kind, x, y, free:true, flee:0, hurt:0, home:new Set()});
+    return true;
+  }
+  return false;
+}
+
+/* чем оборачивается смерть: в лабиринте жизнью, в лесу — потерей вещей и дороги назад */
+const DEATHCOST = () => endless
+  ? "Вы очнётесь на своей поляне, рюкзак останется лежать на месте гибели."
+  : "Минус одна жизнь.";
+
+const survRecord=()=>{ try{ return Number(localStorage.getItem("labirint-survival")||0); }catch(e){ return 0; } };
+const survSave=n=>{ try{ localStorage.setItem("labirint-survival", String(n)); }catch(e){} };
+
+function startSurvival(p){
+  endless=true; sparse=new Map(); lastView=null;
+  W=0; H=0; cells=[]; eV=[]; eH=[];
+  beasts=[]; movers=[]; horses=[];
+  params=Object.assign({}, p, {hear:0, movers:0});
+
+  const spawns=[];
+  for(let i=0;i<p.players;i++){
+    const s=freeSpotNear(0,0,3+i);
+    const c=C(s[0],s[1]);
+    c.t="spawn"; c.spawnOf=i; c.items=[]; c.coins=0;
+    spawns.push(s);
+  }
+  for(let i=0;i<p.wolves;i++)  spawnBeast("wolf",  spawns[0][0], spawns[0][1]);
+  for(let i=0;i<p.sharks;i++)  spawnBeast("shark", spawns[0][0], spawns[0][1]);
+  for(let i=0;i<(p.goats||0);i++) spawnBeast("goat", spawns[0][0], spawns[0][1]);
+  for(let i=0;i<(p.horses||0);i++){
+    const s=freeSpotNear(spawns[0][0], spawns[0][1], 7);
+    horses.push({x:s[0], y:s[1]});
+  }
+  startGame(spawns);
+  say("Вокруг бесконечный лес. Стен нет, но есть деревья, камни и голод.");
+}
+
+function startGame(spawns){
+  const p=params;
+  const bots=Math.min(p.bots, p.players);
+  P=[];
+  for(let i=0;i<p.players;i++){
+    const [x,y]=spawns[i];
+    const bot = i >= p.players-bots;
+    P.push({id:i, name:(bot?"Бот ":"Игрок ")+(i+1), bot, color:COLORS[i], x, y,
+            spawn:{x,y}, prev:{x,y},
+            lives:p.lives, coins:p.coins, items:[], alive:true, won:false,
+            food:p.food, steps:0,
+            stuck:false, stuckTurns:0, onRaft:false, riding:null,
+            mem:new Map(), known:new Set()});
+  }
+  hostSeat=null;
+  if(isHost()){
+    const off = net.hostPlays ? 1 : 0;           // играет хост — первое место его
+    if(net.hostPlays && P[0]) hostSeat=0;
+    net.seats.forEach((s,i)=>{
+      const pl=P[i+off];
+      if(pl){ pl.remote=s.cid; pl.name=s.name; }
+    });
+  }
+  cur=0; round=1; over=false; spyMode=null; findShow=null;
+  P.forEach(pl=>remember(pl, pl.x, pl.y));
+
+  document.getElementById("setup").hidden=true;
+  document.getElementById("editor").hidden=true;
+  document.getElementById("game").hidden=false;
+  document.getElementById("log").innerHTML="";
+  buildBoard();
+  say("Партия началась. Ищите вертолёт.");
+  beginTurn();
+}
+
+function buildBoard(boardId, click){
+  const b=document.getElementById(boardId||"board");
+  const win = endless && !click;                  // редактор всегда показывает всё поле
+  const gw = win ? VIEW : W, gh = win ? VIEW : H;
+  const cs=Math.max(22, Math.min(46, Math.floor(620/Math.max(gw,gh))));
+  b.style.setProperty("--cs", cs+"px");
+  b.style.gridTemplateColumns=`repeat(${gw}, ${cs}px)`;
+  b.innerHTML="";
+  for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){
+    const d=document.createElement("div");
+    d.className="cell"; d.style.width=cs+"px"; d.style.height=cs+"px";
+    d.dataset.x=x; d.dataset.y=y;
+    d.addEventListener("click", ev => {
+      if(click) return click(x,y,ev);
+      // в бесконечном мире клетка на экране и клетка в мире — разные координаты
+      onCellClick(lastView ? lastView.ox+x : x, lastView ? lastView.oy+y : y);
+    });
+    b.appendChild(d);
+  }
+}
+
+/* ===================== память игрока ===================== */
+function snap(x,y){
+  const c=C(x,y);
+  return {t:c.t, items:c.items.slice(), coins:c.coins, ladder:c.ladder};
+}
+function remember(pl,x,y){
+  pl.mem.set(key(x,y), snap(x,y));
+}
+function revealCell(pl,x,y){                     // труба: клетка целиком, вместе с гранями
+  remember(pl,x,y);
+  for(let d=0;d<4;d++){ const k=edgeKey(x,y,d); if(k) pl.known.add(k); }
+}
+
+/* ===================== отрисовка ===================== */
+/* пока ходит бот, на доске остаётся карта живого человека: чужую память не показываем */
+function viewer(){
+  // хост смотрит только своими глазами: чужой ход чужой карты ему не показывает
+  if(isHost()) return hostSeat!=null ? P[hostSeat] : null;
+  const pl=P[cur];
+  if(!pl || !pl.bot) return pl;
+  return P.find(q=>!q.bot && q.alive) || pl;
+}
+
+/* экран ведущего, который сам не играет: поля нет, только ход партии */
+function blankView(){
+  const t=P[cur]||{name:"—",color:"#8c9cb3"};
+  return {w:endless?VIEW:W, h:endless?VIEW:H, ox:0, oy:0, round, over, cells:[],
+          selfIcon:"", watch:false, spy:false, myTurn:false,
+          turn:{name:t.name, color:t.color, bot:!!t.bot},
+          me:{name:"Ведущий", color:"#8c9cb3", lives:0, endless, coins:0,
+              food:0, maxFood:0, steps:0, items:[], riding:null},
+          bag:"Вы ведущий — партия считается у вас",
+          hum:{cls:"hum", html:"🎲 Поле вам не показывается: иначе туман перестал бы быть честным."},
+          acts:[], padEnabled:false};
+}
+
+/* ===== вид игрока =====
+   buildView собирает всё, что игроку позволено знать, и больше ничего.
+   paint рисует строго по этому объекту. По сети поедет ровно он. */
+function buildView(eyes, who){
+  who = who || P[cur];
+  const spot = watch ? P[cur] : eyes;
+  const half=(VIEW-1)/2;
+  const open = watch || endless;        // в лесу всё открыто: туман только в лабиринте
+  const v = {w: endless?VIEW:W, h: endless?VIEW:H,
+             ox: endless?eyes.x-half:0, oy: endless?eyes.y-half:0,
+             round, over, cells:[],
+             selfIcon: manIcon(eyes), watch: open,
+             spy: !!spyMode,
+             turn: {name:P[cur].name, color:P[cur].color, bot:!!P[cur].bot},
+             me: null, hum: null, bag: "", acts: [], padEnabled: false};
+
+  for(let j=0;j<v.h;j++) for(let i=0;i<v.w;i++){
+    const x=v.ox+i, y=v.oy+j;
+    const here = !!(spot && spot.alive && spot.x===x && spot.y===y);
+    const mem  = eyes.mem.get(key(x,y));
+    if(!open && !here && !mem) continue;         // неизвестного не отдаём вовсе
+    const s = (open || here) ? snap(x,y) : mem;
+
+    const c = {x, y, t:s.t, items:s.items.slice(), coins:s.coins, ladder:!!s.ladder,
+               here, known:!open, zone:false, mover:false, big:false,
+               actors:[], edges:[-1,-1,-1,-1]};
+
+    if(watch && !endless && beasts.some(z=>inHome(z,x,y))) c.zone=true;
+    if(open || here)
+      P.forEach(q=>{ if(q.alive && q.x===x && q.y===y && (open || q!==eyes)) c.actors.push(manIcon(q)); });
+    if(open || here || mem){
+      const bb=beastAt(x,y);
+      if(bb) c.actors.push(BICON[bb.kind] + (bb.hurt
+        ? `<span style="font-size:.45em;vertical-align:top;color:#ff8c64">${bb.hurt}</span>` : ""));
+      if(horseAt(x,y)) c.actors.push(HORSE);
+      if(moverAt(x,y)) c.mover=true;
+    }
+    if(findShow && findShow.x===x && findShow.y===y && (c.coins>0 || c.items.length)) c.big=true;
+
+    for(let d=0;d<4;d++){
+      const k=edgeKey(x,y,d);
+      if(k && (open || eyes.known.has(k))) c.edges[d]=edgeVal(x,y,d);
+    }
+    v.cells.push(c);
+  }
+
+  v.me = {name:who.name, color:who.color, lives:who.lives, endless, coins:who.coins,
+          food:who.food, maxFood:params.food, steps:who.steps||0,
+          riding: who.riding ? {left:who.riding.left} : null,
+          items: who.items.slice()};
+
+  v.bag = who.items.length
+    ? who.items.map(i=>`<b>${IICON[i]} ${INAME[i]}</b>`).join(" · ")
+    : "Рюкзак пуст";
+
+  const dist = endless ? 0 : Math.abs(who.x-exitX())+Math.abs(who.y-exitY());
+  const hear = params.hear;
+  if(endless && !who.riding)
+    v.hum={cls:"hum far", html:"🌲 Выживание: раунд <b>"+round+"</b>. Рекорд: "+survRecord()+
+           ". Вертолёта нет — держитесь сколько сможете."};
+  else if(who.riding)
+    v.hum={cls:"hum near", html:"🏇 Верхом: лошадь слушается ещё <b>"+who.riding.left+
+           "</b> ход(ов), по две клетки. Голод стоит на месте."};
+  else if(hear>0 && dist<=Math.ceil(hear/2))
+    v.hum={cls:"hum near", html:"🚁 Громкий гул — вертолёт совсем рядом"};
+  else if(hear>0 && dist<=hear) v.hum={cls:"hum far", html:"🚁 Далёкий гул"};
+  else v.hum={cls:"hum", html:"Гула не слышно"};
+
+  const blocked = over || !!spyMode || who.bot || who!==P[cur];   // не твой ход — кнопки гаснут
+  v.acts = actionList(who).map(a=>({id:a.id, label:a.label,
+                                    enabled: a.always ? true : (a.on && !blocked)}));
+  v.padEnabled = !(over || spyMode || who.stuck || who.bot || who!==P[cur]);
+  v.myTurn = (who===P[cur]);
+  return v;
+}
+
+/* список действий — одинаковый и для кнопок на экране, и для команд по сети */
+function actionList(pl){
+  const out=[], c=C(pl.x,pl.y);
+  const add=(id,label,on,always)=>out.push({id,label,on:on!==false,always:!!always});
+
+  if(pl.stuck)
+    add("climb", c.ladder?"Выбраться по лестнице (она уже в яме)":"Поставить лестницу и выбраться",
+        pl.items.includes("ladder") || c.ladder);
+  if(params.food) ["steak","fish","meat"].forEach(k=>{
+    if(pl.items.includes(k))
+      add("eat:"+k, IICON[k]+" Съесть "+INAME[k].toLowerCase()+" (+"+FOOD[k]+")"+
+          (pl.food<params.food?"":" — вы и так сыты"));
+  });
+  if(pl.items.includes("rod") && onWater(pl))
+    add("fish", "🎣 Ловить рыбу (шанс "+Math.round(bite()*100)+" %)");
+  if(pl.riding) add("dismount", "🐴 Слезть с лошади");
+  else {
+    const h=horseAt(pl.x,pl.y);
+    if(h && !h.rider) add("horse", "🐴 Подойти к лошади");
+  }
+  if(c.t==="shop") add("shop", "Магазин");
+  if(pl.items.includes("spyglass")) add("spy", "Посмотреть в подзорную трубу");
+  for(let d=0;d<4;d++){                      // срубить дерево или разбить камень рядом
+    const [nx,ny]=stepXY(pl.x,pl.y,d);
+    if(!inB(nx,ny)) continue;
+    const t=C(nx,ny).t;
+    if(t==="tree") add("chop:"+d, "🪓 Срубить дерево ("+DIRNAME[d]+")");
+    else if(t==="rock" && pl.items.includes("pick"))
+      add("mine:"+d, IICON.pick+" Разбить камень ("+DIRNAME[d]+")");
+  }
+  if(countOf(pl,"stick") || countOf(pl,"plank") || countOf(pl,"stone")) add("craft", "🛠 Верстак");
+  if(pl.items.length) add("drop", "🗑 Выбросить предмет");
+  const loot=[];
+  if(c.coins>0) loot.push("монеты ("+c.coins+")");
+  c.items.forEach(i=>loot.push(INAME[i].toLowerCase()));
+  if(loot.length) add("pickup", "✋ Поднять: "+loot.join(", "));
+  const nb=neighbourStuck(pl);
+  if(nb) add("rescue:"+nb.id, "Вытащить из ямы: "+nb.name);
+  add("skip", "Пропустить ход<kbd>Enter</kbd>");
+  if(spyMode) add("spycancel", "Отменить трубу", true, true);
+  return out;
+}
+
+function doAct(pl, id){
+  const i=id.indexOf(":"), a=i<0?id:id.slice(0,i), arg=i<0?null:id.slice(i+1);
+  if(a==="climb") actClimb();
+  else if(a==="eat") actEat(arg);
+  else if(a==="fish") actFish();
+  else if(a==="dismount"){ dismount(pl, pl.name+" спешился, лошадь ускакала."); render(); endTurn(); }
+  else if(a==="horse"){ const h=horseAt(pl.x,pl.y); if(h && !h.rider) meetHorse(pl,h,()=>endTurn()); }
+  else if(a==="shop") actShop();
+  else if(a==="spy") actSpy();
+  else if(a==="chop") actChop(Number(arg));
+  else if(a==="mine") actMine(Number(arg));
+  else if(a==="craft") actCraft();
+  else if(a==="drop") actDrop();
+  else if(a==="pickup") actPickup();
+  else if(a==="rescue"){ const q=P.find(z=>String(z.id)===arg); if(q) actRescue(q); }
+  else if(a==="move") move(Number(arg));
+  else if(a==="skip") actSkip();
+  else if(a==="spycancel"){ spyMode=null; render(); }
+}
+
+function render(){
+  const eyes=viewer();
+  paint(eyes ? buildView(eyes, isHost() ? eyes : undefined) : blankView());
+  pushViews();
+}
+
+function paint(v){
+  lastView=v;
+  const b=document.getElementById("board");
+  const side=["t","r","b","l"];
+  for(let i=0;i<b.children.length;i++) b.children[i].className="cell";
+
+  v.cells.forEach(c=>{
+    const el=b.children[(c.y-v.oy)*v.w + (c.x-v.ox)];
+    if(!el) return;
+    el.className="cell t-"+c.t + (c.known?" known":"") + (c.here?" here":"")
+               + (v.spy?" pick":"") + (c.zone?" zone":"") + (c.mover?" mover":"");
+
+    const marks=[];
+    if(c.coins>0) marks.push(IICON.coin);
+    c.items.forEach(i=>marks.push(IICON[i]));
+    if((c.t==="pit" || c.t==="spikes") && c.ladder) marks.push(IICON.ladder);
+    const terr=TICON[c.t]||"";
+
+    let html;
+    if(c.big && marks.length){
+      html = `<span class="ic pop">${marks[0]}</span>`
+           + `<span class="corner">${v.selfIcon}</span>`
+           + (marks.length>1 ? `<span class="sub">${marks.slice(1).join("")}</span>` : "");
+    } else if(!v.watch && c.here){
+      html = `<span class="ic">${v.selfIcon}</span>`
+           + (terr ? `<span class="corner">${terr}</span>` : "")
+           + (marks.length ? `<span class="sub">${marks.join("")}</span>` : "")
+           + (c.actors.length ? `<span class="mates">${c.actors.join("")}</span>` : "");
+    } else if(c.actors.length){
+      html = `<span class="ic">${c.actors[0]}</span>`
+           + (terr ? `<span class="corner">${terr}</span>` : "")
+           + (marks.length ? `<span class="sub">${marks.join("")}</span>` : "")
+           + (c.actors.length>1 ? `<span class="mates">${c.actors.slice(1).join("")}</span>` : "");
+    } else {
+      html = `<span class="ic">${marks.length ? marks[0] : terr}</span>`
+           + (marks.length && terr ? `<span class="corner">${terr}</span>` : "")
+           + (marks.length>1 ? `<span class="sub">${marks.slice(1).join("")}</span>` : "");
+    }
+    el.innerHTML=html;
+
+    for(let d=0;d<4;d++){
+      const ev=c.edges[d];
+      if(ev===1) el.classList.add("w-"+side[d]);
+      else if(ev===2) el.classList.add("d-"+side[d]);
+      else if(ev===3) el.classList.add("o-"+side[d]);
+    }
+  });
+
+  paintPanel(v);
+}
+
+function paintPanel(v){
+  const me=v.me;
+  document.getElementById("pdot").style.background=me.color;
+  document.getElementById("pname").textContent=me.name;
+  document.getElementById("plives").textContent = me.endless ? "❤️ ∞" : "❤️ "+me.lives;
+  document.getElementById("pcoins").innerHTML=SVG_COIN+" "+me.coins;
+
+  const fd=document.getElementById("pfood");
+  if(!me.maxFood) fd.innerHTML="";
+  else{
+    let bars="";
+    for(let i=0;i<me.maxFood;i++)
+      bars+=`<i class="hb${i<me.food ? (me.food<=2?" low":" on") : ""}"></i>`;
+    fd.innerHTML="🥩 "+bars;
+    fd.title="Голод: "+me.food+" из "+me.maxFood+
+             ", полоска уходит каждые "+HUNGER_STEP+" ходов (ход "+me.steps+" из "+HUNGER_STEP+")";
+  }
+  document.getElementById("pturn").innerHTML = "раунд "+v.round+" · " +
+    (v.myTurn ? "<b style='color:var(--ink)'>ваш ход</b>"
+              : "ходит <b style='color:"+v.turn.color+"'>"+v.turn.name+"</b>");
+  document.getElementById("pbag").innerHTML=v.bag;
+
+  const hum=document.getElementById("phum");
+  hum.className=v.hum.cls; hum.innerHTML=v.hum.html;
+
+  const acts=document.getElementById("acts"); acts.innerHTML="";
+  v.acts.forEach(a=>{
+    const btn=document.createElement("button");
+    btn.innerHTML=a.label;
+    btn.disabled=!a.enabled;
+    btn.onclick=()=>{ if(!sendAct(a.id)) doAct(P[cur], a.id); };
+    acts.appendChild(btn);
+  });
+  document.querySelectorAll(".pad button").forEach(btn=>{ btn.disabled=!v.padEnabled; });
+}
+
+const exitX=()=>{ for(let i=0;i<cells.length;i++) if(cells[i].t==="exit") return i%W; return 0; };
+const exitY=()=>{ for(let i=0;i<cells.length;i++) if(cells[i].t==="exit") return (i-(i%W))/W; return 0; };
+
+function say(t){
+  const log=document.getElementById("log");
+  const d=document.createElement("div"); d.textContent=t;
+  log.insertBefore(d, log.firstChild);
+  while(log.children.length>60) log.removeChild(log.lastChild);
+}
+
+/* ===================== ход ===================== */
+function beginTurn(){
+  const pl=P[cur];
+  if(over) return;
+  if(!pl.alive){ nextPlayer(); return; }
+  // три хода в яме без лестницы — смерть, сколько бы игроков ни было в партии
+  if(pl.stuck && !pl.items.includes("ladder") && !C(pl.x,pl.y).ladder){
+    pl.stuckTurns++;
+    if(pl.stuckTurns>=3){
+      say(pl.name+" просидел в яме три хода и погиб.");
+      render();
+      notify(pl,"Яма",
+        `<p class="findrow">🕳</p>
+         <p><b style="color:${pl.color}">${pl.name}</b> не выбрался из ямы за три хода.
+            Минус одна жизнь, рюкзак остался наверху.</p>`,
+        ()=>death(pl,"яма",()=>nextPlayer()));
+      return;
+    }
+    say(pl.name+" сидит в яме, ход "+pl.stuckTurns+" из 3. Нужна лестница или сосед.");
+  }
+  if(pl.bot){ render(); setTimeout(()=>botTurn(pl), 420); return; }
+  const people = P.filter(q=>q.alive && !q.bot).length;
+  if(people>1 && !net){                      // по сети экран передавать не надо
+    render();
+    modal(`Ход: ${pl.name}`,
+      `<p>Передайте управление игроку и нажмите «Готов» — карта у каждого своя.</p>`,
+      [{label:"Готов", main:true, cb:()=>{ closeModal(); render(); }}]);
+  } else render();
+}
+
+/* ===================== бот ===================== */
+function botTurn(pl){
+  if(over || !pl.alive || P[cur]!==pl) return;
+  const c=C(pl.x,pl.y);
+
+  if(pl.stuck){
+    if(pl.items.includes("ladder") || c.ladder) actClimb(); else actSkip();
+    return;
+  }
+
+  // проголодался — ест, не дожидаясь последней полоски
+  if(params.food && pl.food<=2){
+    const meal=["meat","fish","steak"].find(k=>pl.items.includes(k));
+    if(meal){ actEat(meal); return; }
+  }
+
+  // стоит на воде со спиннингом и без еды — самое время забросить
+  if(params.food && pl.food<=3 && pl.items.includes("rod") && onWater(pl)
+     && !["fish","steak","meat"].some(k=>pl.items.includes(k))){ actFish(); return; }
+
+  // в магазине берём то, чего ещё нет, по старшинству
+  if(c.t==="shop"){
+    const hungry = params.food && pl.food<=3 && !pl.items.includes("steak");
+    const want = (hungry && pl.coins>=PRICE.steak) ? "steak"
+      : ["knife","rod","spyglass","raft","ladder"]
+        .find(it=>!pl.items.includes(it) && pl.coins>=PRICE[it]);
+    if(want){
+      pl.coins-=PRICE[want]; pl.items.push(want);
+      say(pl.name+" купил: "+INAME[want]+".");
+      endTurn(); return;
+    }
+  }
+
+  // труба идёт в дело, когда гул уже слышно
+  const dist=Math.abs(pl.x-exitX())+Math.abs(pl.y-exitY());
+  if(pl.items.includes("spyglass") && params.hear>0 && dist<=params.hear){
+    const spots=[];
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      if(pl.mem.has(key(x,y))) continue;
+      spots.push([x,y,Math.abs(x-pl.x)+Math.abs(y-pl.y)]);
+    }
+    if(spots.length>=4){
+      spots.sort((u,v)=>u[2]-v[2]);
+      spots.slice(0,4).forEach(s=>revealCell(pl,s[0],s[1]));
+      pl.items.splice(pl.items.indexOf("spyglass"),1);
+      say(pl.name+" осмотрел четыре клетки в подзорную трубу.");
+      render(); endTurn(); return;
+    }
+  }
+
+  const d=botDir(pl);
+  if(d<0){ actSkip(); return; }
+  move(d);
+}
+
+/* бот ходит по своей памяти — чужого знать ему неоткуда */
+function botDir(pl){
+  let best=-1, bs=-1e9;
+  for(let d=0;d<4;d++){
+    const [nx,ny]=stepXY(pl.x,pl.y,d);
+    if(!inB(nx,ny)) continue;
+    const ek=edgeKey(pl.x,pl.y,d), ev=edgeVal(pl.x,pl.y,d);
+    const knownEdge = ek && pl.known.has(ek);
+    if(knownEdge && ev===1) continue;
+    if(knownEdge && ev===2 && !pl.items.includes("key")) continue;
+
+    const mem=pl.mem.get(key(nx,ny));
+    let s=0;
+    if(!mem) s+=12;                                   // неизвестное манит
+    else {
+      const hasLadder=pl.items.includes("ladder");
+      if(mem.t==="spikes" && !mem.ladder && !hasLadder) continue;
+      if(mem.t==="water" && !pl.onRaft && !pl.items.includes("raft")
+         && !mem.items.includes("raft")) continue;
+      if(mem.t==="pit" && !mem.ladder && !hasLadder) s-=40;
+      if(mem.t==="exit") s+=1000;
+      if(mem.t==="shop" && pl.coins>=3) s+=8;
+      if(mem.coins || mem.items.length) s+=7;
+      s+=1;
+    }
+    if(nx===pl.prev.x && ny===pl.prev.y) s-=6;        // не топтаться туда-сюда
+    s+=Math.random()*3;
+    if(s>bs){ bs=s; best=d; }
+  }
+  return best;
+}
+
+function endTurn(){
+  if(over) return;
+  const pl=P[cur];
+  const wasSkip=skipped;
+  skipped=false; spyMode=null; findShow=null;
+
+  // каждый пятнадцатый непропущенный ход съедает полоску голода; верхом голод стоит
+  if(pl && pl.alive && !wasSkip && !pl.riding && params.food){
+    pl.steps=(pl.steps||0)+1;
+    if(pl.steps>=HUNGER_STEP){
+      pl.steps=0; pl.food--;
+      if(pl.food<=0){
+        say(pl.name+" истратил последнюю полоску голода.");
+        render();
+        notify(pl,"Голод",
+          `<p class="findrow">🥩</p>
+           <p><b style="color:${pl.color}">${pl.name}</b> умер от голода. ${DEATHCOST()}</p>`,
+          ()=>death(pl,"голод",()=>nextPlayer()));
+        return;
+      }
+      say(pl.name+" проголодался, полосок осталось: "+pl.food+".");
+      if(pl.food<=2){                       // два последних деления — предупреждаем явно
+        render();
+        notify(pl,"Голод",
+          `<p class="findrow">🥩</p>
+           <p><b style="color:${pl.color}">${pl.name}</b>, ${pl.food===1
+             ? "осталась <b>последняя</b> полоска. Ещё "+HUNGER_STEP+
+               " ходов без еды — и минус жизнь."
+             : "осталось <b>две</b> полоски. Пора искать еду."}</p>
+           <p>Стейк лежит на поле и стоит 1 монету в магазине, рыбу ловят спиннингом
+              с плота, а верхом на лошади голод не идёт вовсе.</p>`,
+          ()=>nextPlayer());
+        return;
+      }
+    }
+  }
+  nextPlayer();
+}
+function nextPlayer(){
+  if(P.every(p=>!p.alive)){ finish(null); return; }
+  let guard=0, wrapped=false;
+  do{
+    cur=(cur+1)%P.length;
+    if(cur===0) wrapped=true;
+    guard++;
+  } while(!P[cur].alive && guard<40);
+  if(wrapped){ round++; worldTurn(()=>beginTurn()); }   // круг замкнулся — ходит поле
+  else beginTurn();
+}
+
+/* ===================== ход поля: стены и звери ===================== */
+function worldTurn(done){
+  if(over) return;
+  // в выживании лес зарастает и понемногу звереет
+  if(endless){
+    if(round>survRecord()) survSave(round);      // рекорд копится по ходу: конца-то нет
+    if(round%6===0) growTrees();
+    if(round%15===0 && beasts.filter(b=>b.kind==="wolf").length<6){
+      const t=P.find(q=>q.alive);
+      if(t && spawnBeast("wolf", t.x, t.y)) say("Где-то завыли: в лесу стало на одного волка больше.");
+    }
+    if(round%20===0 && beasts.filter(b=>b.kind==="goat").length<4){
+      const t=P.find(q=>q.alive);
+      if(t && spawnBeast("goat", t.x, t.y)) say("Из чащи вышла коза.");
+    }
+  }
+  const queue=[];
+  movers.forEach(m=>queue.push(next=>stepMover(m,next)));
+  // в лесу живое шевелится только в видимой части: ушли далеко — замерло до встречи
+  beasts.forEach(b=>queue.push(next=>{
+    if(endless && !inSight(b.x,b.y)){ next(); return; }
+    stepBeast(b,next);
+  }));
+  horses.forEach(h=>queue.push(next=>{                      // лошадь прыткая
+    if(!h.rider && (!endless || inSight(h.x,h.y))){ horseStep(h); horseStep(h); }
+    next();
+  }));
+  let i=0;
+  (function run(){
+    if(over) return;
+    if(i>=queue.length){ render(); done(); return; }
+    // наблюдателю показываем каждый шаг отдельно, иначе всё дёргается разом
+    queue[i++](()=>{ render(); if(watch) setTimeout(run, 320); else run(); });
+  })();
+}
+
+/* сообщение конкретному игроку; бот читать не умеет и идёт дальше */
+function notify(pl, title, html, next){
+  ask(pl, title, html, [{label:"Ладно", main:true, cb:()=>{ closeModal(); next(); }}], 0);
+}
+
+function stepMover(m, next){
+  const [ox,oy]=m.path[m.i];
+  let ni=m.i+m.step;
+  if(ni<0 || ni>=m.path.length){ m.step*=-1; ni=m.i+m.step; }
+  const [nx,ny]=m.path[ni];
+  m.i=ni;
+
+  const victim=P.find(q=>q.alive && q.x===nx && q.y===ny);
+  if(!victim){ next(); return; }
+
+  const d=DIRS.findIndex(v=>v[0]===nx-ox && v[1]===ny-oy);
+  const [px,py]=stepXY(nx,ny,d);
+  const ev=edgeVal(nx,ny,d);
+  const blocked = !inB(px,py) || (ev!==0 && ev!==3) || !!moverAt(px,py)
+                  || C(px,py).t==="water";
+
+  if(blocked){
+    say("Движущаяся стена прижала игрока "+victim.name+" — деваться было некуда.");
+    notify(victim,"Движущаяся стена",
+      `<p class="findrow">${MOVER}</p><p>Стена прижала <b>${victim.name}</b> к стене. Минус одна жизнь.</p>`,
+      ()=>death(victim,"стена",next));
+    return;
+  }
+  victim.prev={x:nx,y:ny};
+  victim.x=px; victim.y=py;
+  remember(victim,px,py);
+  say("Движущаяся стена столкнула "+victim.name+" на соседнюю клетку.");
+  const tc=C(px,py);
+  if(tc.t==="spikes" && !tc.ladder){
+    notify(victim,"Движущаяся стена",
+      `<p class="findrow">${MOVER}🔺</p><p>Стена столкнула <b>${victim.name}</b> прямо на шипы.</p>`,
+      ()=>death(victim,"шипы",next));
+    return;
+  }
+  if(tc.t==="pit" && !tc.ladder){
+    victim.stuck=true; victim.stuckTurns=0;
+    say(victim.name+" свалился в яму.");
+    notify(victim,"Движущаяся стена",
+      `<p class="findrow">${MOVER}🕳</p><p>Стена столкнула <b>${victim.name}</b> в яму.</p>`, next);
+    return;
+  }
+  notify(victim,"Движущаяся стена",
+    `<p class="findrow">${MOVER}</p><p><b>${victim.name}</b>, вас сдвинула движущаяся стена.</p>`, next);
+}
+
+function beastOk(b,x,y){
+  if(!inB(x,y)) return false;
+  const t=C(x,y).t;
+  if(b.kind==="shark") return t==="water";
+  return t!=="water" && t!=="pit" && t!=="spikes" && !BLOCKER[t];
+}
+
+function huntTarget(b){
+  let best=null, bd=1e9;
+  for(const q of P){
+    if(!q.alive || !inHome(b,q.x,q.y) || !beastOk(b,q.x,q.y)) continue;
+    const d=Math.abs(q.x-b.x)+Math.abs(q.y-b.y);
+    if(d<bd){ bd=d; best=q; }
+  }
+  return best;
+}
+
+/* первый шаг кратчайшего пути к добыче, не выходя из своей области */
+function beastPath(b, prey){
+  const prev=new Map(), seen=new Set([key(b.x,b.y)]);
+  const q=[[b.x,b.y]];
+  for(let h=0; h<q.length; h++){
+    const [x,y]=q[h];
+    if(x===prey.x && y===prey.y) break;
+    for(let d=0;d<4;d++){
+      const v=edgeVal(x,y,d);
+      if(v===1 || v===2) continue;
+      const [nx,ny]=stepXY(x,y,d);
+      const kk=key(nx,ny);
+      if(seen.has(kk) || !inB(nx,ny) || !inHome(b,nx,ny) || !beastOk(b,nx,ny)) continue;
+      // в бесконечном мире поиск ограничиваем, иначе он не кончится
+      if(b.free && (Math.abs(nx-b.x)>14 || Math.abs(ny-b.y)>14)) continue;
+      seen.add(kk); prev.set(kk,[x,y]); q.push([nx,ny]);
+    }
+  }
+  let step=[prey.x,prey.y];
+  if(!prev.has(key(step[0],step[1]))) return null;
+  for(let guard=0; guard<W*H; guard++){
+    const p=prev.get(key(step[0],step[1]));
+    if(!p) return null;
+    if(p[0]===b.x && p[1]===b.y) return step;
+    step=p;
+  }
+  return null;
+}
+
+/* с любого убитого существа на землю падает мясо */
+function dropMeat(x,y){ C(x,y).items.push("meat"); }
+
+/* коза мирная: игрока не трогает и за ним не ходит, только бродит */
+function meetGoat(pl, g, done){
+  const shoo=()=>{ stepBeast(g, ()=>{}); stepBeast(g, ()=>{}); done(); };
+  if(!weapon(pl)){
+    say("Коза шарахнулась от "+pl.name+": голыми руками её не взять.");
+    shoo(); return;
+  }
+  ask(pl,"Коза",
+    `<p class="findrow">🐐</p>
+     <p>Коза смирная — не бодается и не убегает далеко. С оружием (${weaponName(pl)})
+        её можно зарезать, останется мясо.</p>`,
+    [{label:"Зарезать", main:true, cb:()=>{
+        closeModal();
+        const i=beasts.indexOf(g); if(i>=0) beasts.splice(i,1);
+        dropMeat(pl.x,pl.y);
+        remember(pl,pl.x,pl.y);
+        say(pl.name+" зарезал козу: на земле осталось мясо.");
+        render();
+        done();
+      }},
+     {label:"Не трогать", cb:()=>{ closeModal(); shoo(); }}], 0);
+}
+
+function stepBeast(b, next){
+  // раненый зверь пять ходов удирает и никого не трогает
+  if(b.flee>0){
+    b.flee--;
+    fleeStep(b);
+    if(b.flee===0) say(BNAME[b.kind]+" оправился от испуга.");
+    next(); return;
+  }
+  const prey = b.kind==="goat" ? null : huntTarget(b);   // коза ни за кем не ходит
+  let moved=false;
+  if(prey){
+    const s=beastPath(b,prey);                 // кратчайший путь, если он есть
+    if(s){ b.x=s[0]; b.y=s[1]; moved=true; }
+  }
+  if(!moved){
+    // пути нет или добычи не видно — зверь всё равно не стоит столбом
+    const opts=[];
+    for(let d=0;d<4;d++){
+      const v=edgeVal(b.x,b.y,d);
+      if(v===1 || v===2) continue;
+      const [nx,ny]=stepXY(b.x,b.y,d);
+      if(inHome(b,nx,ny) && beastOk(b,nx,ny)) opts.push([nx,ny]);
+    }
+    if(opts.length){
+      let best=opts[rnd(opts.length)];
+      if(prey){                                // ломится в сторону добычи напрямик
+        let bd=1e9;
+        opts.forEach(s=>{
+          const dd=Math.abs(s[0]-prey.x)+Math.abs(s[1]-prey.y);
+          if(dd<bd){ bd=dd; best=s; }
+        });
+      }
+      b.x=best[0]; b.y=best[1];
+    }
+  }
+  const victim = b.kind==="goat" ? null : P.find(q=>q.alive && q.x===b.x && q.y===b.y);
+  if(victim) beastFight(b,victim,next); else next();
+}
+
+const nearestPlayer=b=>{
+  let best=null, bd=1e9;
+  for(const q of P){
+    if(!q.alive) continue;
+    const d=Math.abs(q.x-b.x)+Math.abs(q.y-b.y);
+    if(d<bd){ bd=d; best=q; }
+  }
+  return best;
+};
+
+/* шаг прочь от ближайшего игрока, не выходя из своей области */
+function fleeStep(b){
+  const prey=nearestPlayer(b);
+  let best=null, bd=-1;
+  for(let d=0;d<4;d++){
+    const v=edgeVal(b.x,b.y,d);
+    if(v===1 || v===2) continue;
+    const [nx,ny]=stepXY(b.x,b.y,d);
+    if(!inB(nx,ny) || !inHome(b,nx,ny) || !beastOk(b,nx,ny)) continue;
+    if(P.some(q=>q.alive && q.x===nx && q.y===ny)) continue;
+    const dist = prey ? Math.abs(nx-prey.x)+Math.abs(ny-prey.y) : rnd(50);
+    if(dist>bd){ bd=dist; best=[nx,ny]; }
+  }
+  if(best){ b.x=best[0]; b.y=best[1]; }
+}
+
+/* ===================== лошадь ===================== */
+const nearestOf=(list,o)=>{
+  let best=null, bd=1e9;
+  for(const q of list){
+    const d=Math.abs(q.x-o.x)+Math.abs(q.y-o.y);
+    if(d<bd){ bd=d; best=q; }
+  }
+  return best;
+};
+
+/* Лошадь не стоит на месте никогда. От людей она бежит, но на сено идёт сама;
+   волка обходит в любом случае, в воду, ямы и шипы не лезет. */
+function horseStep(h){
+  const lure=nearestOf(P.filter(q=>q.alive && q.items.includes("hay")), h);
+  const man =nearestOf(P.filter(q=>q.alive), h);
+  const wolf=nearestOf(beasts.filter(b=>b.kind==="wolf"), h);
+
+  const spots=[];
+  for(let d=0;d<4;d++){
+    const v=edgeVal(h.x,h.y,d);
+    if(v===1 || v===2) continue;
+    const [nx,ny]=stepXY(h.x,h.y,d);
+    if(!inB(nx,ny)) continue;
+    const t=C(nx,ny).t;
+    if(t==="water" || t==="pit" || t==="spikes" || BLOCKER[t]) continue;
+    if(moverAt(nx,ny) || beastAt(nx,ny) || horseAt(nx,ny)) continue;
+    // на клетку с человеком идёт, только если у того есть сено
+    const who=P.find(q=>q.alive && q.x===nx && q.y===ny);
+    if(who && !who.items.includes("hay")) continue;
+    spots.push([nx,ny]);
+  }
+  if(!spots.length) return;                       // зажата со всех сторон
+
+  let best=null, bs=-1e9;
+  for(const [nx,ny] of spots){
+    let s=Math.random()*2;
+    if(lure) s -= 3*(Math.abs(nx-lure.x)+Math.abs(ny-lure.y));   // тянется к сену
+    else if(man) s += Math.abs(nx-man.x)+Math.abs(ny-man.y);     // иначе удирает
+    if(wolf) s += 2*(Math.abs(nx-wolf.x)+Math.abs(ny-wolf.y));   // волка боится сильнее
+    if(s>bs){ bs=s; best=[nx,ny]; }
+  }
+  h.x=best[0]; h.y=best[1];
+}
+
+const RIDE_TURNS = 10;                    // сколько ходов лошадь слушается
+
+function meetHorse(pl, h, done){
+  if(!pl.items.includes("hay")){
+    say("Лошадь шарахнулась от "+pl.name+" и ускакала — приманить нечем.");
+    horseStep(h); horseStep(h);
+    done(); return;
+  }
+  ask(pl,"Лошадь",
+    `<p class="findrow">${HORSE}🌾</p>
+     <p>Лошадь подпустила к себе. Покормите сеном — и она будет слушаться
+        ${RIDE_TURNS} ходов: по две клетки за ход, куда скажете. Верхом не хочется есть,
+        голод стоит на месте. Потом она вас сбросит и ускачет.</p>`,
+    [{label:"Покормить и сесть верхом", main:true, cb:()=>{ closeModal(); mount(pl,h,done); }},
+     {label:"Не трогать", cb:()=>{ closeModal(); horseStep(h); horseStep(h); done(); }}],
+    0);
+}
+
+function mount(pl, h, done){
+  pl.items.splice(pl.items.indexOf("hay"),1);
+  pl.riding={horse:h, left:RIDE_TURNS};
+  h.rider=pl;
+  h.x=pl.x; h.y=pl.y;
+  say(pl.name+" скормил лошади сено и сел верхом: "+RIDE_TURNS+" ходов она слушается.");
+  render();
+  done();
+}
+
+function dismount(pl, why){
+  if(!pl.riding) return;
+  const h=pl.riding.horse;
+  pl.riding=null;
+  h.rider=null;
+  horseStep(h); horseStep(h);
+  say(why);
+}
+
+function tickRide(pl){
+  if(!pl.riding) return;
+  pl.riding.left--;
+  if(pl.riding.left<=0) dismount(pl, "Лошадь перестала слушаться "+pl.name+" и ускакала.");
+}
+
+/* верхом игрок идёт на две клетки за ход; лошадь не лезет в воду, ямы и шипы */
+function rideMove(pl, d){
+  let steps=0;
+  for(let i=0;i<2;i++){
+    const k=edgeKey(pl.x,pl.y,d), v=edgeVal(pl.x,pl.y,d);
+    if(!k || v===1 || v===2){ if(k) pl.known.add(k); break; }
+    const [nx,ny]=stepXY(pl.x,pl.y,d);
+    if(!inB(nx,ny)) break;
+    const t=C(nx,ny).t;
+    if(t==="water" || t==="pit" || t==="spikes" || BLOCKER[t]){ remember(pl,nx,ny); break; }
+    if(moverAt(nx,ny)){ remember(pl,nx,ny); break; }
+    pl.known.add(k);
+    pl.prev={x:pl.x, y:pl.y};
+    pl.x=nx; pl.y=ny;
+    pl.riding.horse.x=nx; pl.riding.horse.y=ny;
+    remember(pl,nx,ny);
+    steps++;
+  }
+  if(!steps){
+    say(pl.name+" направил лошадь не туда — она упёрлась и не пошла.");
+    tickRide(pl);
+    endTurn(); return;
+  }
+  say(pl.name+" проехал верхом "+steps+(steps===1?" клетку":" клетки")+" "+DIRNAME[d]+".");
+  tickRide(pl);
+  arrive(pl);
+}
+
+function beastFight(b, pl, next){
+  const nm=BNAME[b.kind], ic=BICON[b.kind];
+  const w=weapon(pl);
+  if(!w){
+    say(nm+" настиг игрока "+pl.name+", а отбиваться нечем.");
+    notify(pl, nm, `<p class="findrow">${ic}</p>
+      <p>${nm} настиг игрока <b>${pl.name}</b>. Отбиваться нечем. ${DEATHCOST()}</p>`,
+      ()=>death(pl, b.kind, next));
+    return;
+  }
+  const need = w===2 ? 4 : 5;            // ножом хватает четвёрки, деревяшкой нужна пятёрка
+  const arm  = weaponIcon(pl);
+  const r=roll();
+  if(r>=need){
+    b.hurt=(b.hurt||0)+1;
+    if(b.hurt>=3){                                   // третья победа — зверь готов
+      const i=beasts.indexOf(b);
+      if(i>=0) beasts.splice(i,1);
+      dropMeat(b.x,b.y);
+      say(pl.name+" одолел "+nm.toLowerCase()+" в третий раз — зверь убит, осталось мясо.");
+      notify(pl, nm, `<p class="findrow">${ic}${arm}</p><p class="dice">🎲 ${r}</p>
+        <p><b>Третья победа.</b> ${nm} убит и исчезает с карты насовсем.</p>`, next);
+      return;
+    }
+    b.flee=5;
+    fleeStep(b); fleeStep(b);
+    say(pl.name+" отбился от "+nm.toLowerCase()+" ("+weaponName(pl)+"), кубик "+r+
+        ". Ран у зверя: "+b.hurt+" из 3.");
+    notify(pl, nm, `<p class="findrow">${ic}${arm}</p><p class="dice">🎲 ${r}</p>
+      <p>Отбился: нужно было ${need} и больше. ${nm} удирает и пять ходов не нападает.
+         Ран у него уже ${b.hurt} из 3 — после третьей погибнет.</p>`, next);
+  } else {
+    say(pl.name+" не отбился от "+nm.toLowerCase()+" ("+weaponName(pl)+"), кубик "+r+".");
+    notify(pl, nm, `<p class="findrow">${ic}${arm}</p><p class="dice">🎲 ${r}</p>
+      <p>Отбиться не вышло: нужно было ${need} и больше. ${DEATHCOST()}
+         Оружие остаётся при игроке.</p>`,
+      ()=>death(pl, b.kind, next));
+  }
+}
+
+/* что игрок видит на клетке, в которую упёрся */
+const TWORD = {tree:"дерево", rock:"камень",
+               empty:"пустая клетка", pit:"яма", spikes:"яма с шипами", water:"вода",
+               shop:"магазин", exit:"вертолёт", spawn:"точка возрождения"};
+function describe(x,y){
+  const c=C(x,y);
+  const extra=[];
+  if(c.t==="pit" && c.ladder) extra.push("в ней лестница");
+  if(c.t==="spikes" && c.ladder) extra.push("через них перекинута лестница");
+  if(moverAt(x,y)) extra.push("её перегородила движущаяся стена");
+  if(c.coins) extra.push("монеты ("+c.coins+")");
+  c.items.forEach(i=>extra.push(INAME[i]));
+  return (TWORD[c.t]||"клетка") + (extra.length ? ", " + extra.join(", ") : "");
+}
+
+/* ход потерян, но клетка впереди разглядена */
+function peek(pl,nx,ny,title,lead){
+  remember(pl,nx,ny);
+  const what=describe(nx,ny);
+  say(lead+" Разглядел: "+what+".");
+  render();
+  ask(pl, title, `<p>${lead}</p><p>Отсюда видно: <b>${what}</b>.</p>`,
+    [{label:"Ладно", main:true, cb:()=>{ closeModal(); endTurn(); }}], 0);
+}
+
+function move(d){
+  const pl=P[cur];
+  if(over || spyMode || pl.stuck || !pl.alive) return;
+  if(pl.riding){ rideMove(pl,d); return; }
+  const v=edgeVal(pl.x,pl.y,d);
+  const k=edgeKey(pl.x,pl.y,d);
+
+  if(k) pl.known.add(k);
+
+  if(v===1 || !k){
+    say(pl.name+" упёрся в глухую стену ("+DIRNAME[d]+") и потерял ход.");
+    endTurn(); return;
+  }
+
+  const [nx,ny]=stepXY(pl.x,pl.y,d);
+
+  // закрытая дверь: спрашиваем про ключ
+  if(v===2){
+    if(!pl.items.includes("key")){
+      peek(pl,nx,ny,"Запертая дверь",
+           pl.name+" упёрся в запертую дверь ("+DIRNAME[d]+") — ключа нет, ход потерян.");
+      return;
+    }
+    ask(pl,"Запертая дверь",
+      `<p>Дверь ${DIRNAME[d]} заперта. В рюкзаке есть ключ — он потратится насовсем.</p>`,
+      [{label:"Открыть ключом", main:true, cb:()=>{
+          closeModal();
+          pl.items.splice(pl.items.indexOf("key"),1);
+          edgeSet(pl.x,pl.y,d,3);
+          say(pl.name+" открыл дверь ключом.");
+          enter(pl,nx,ny);
+        }},
+       {label:"Не тратить ключ", cb:()=>{
+          closeModal();
+          peek(pl,nx,ny,"Дверь осталась запертой",
+               pl.name+" поберёг ключ и потерял ход.");
+        }}], 0);
+    return;
+  }
+
+  enter(pl,nx,ny);
+}
+
+/* шаг на клетку: вода спрашивает про плот, открытые шипы — про лестницу */
+function enter(pl,nx,ny){
+  const to=C(nx,ny);
+
+  // дерево или камень поперёк дороги
+  if(BLOCKER[to.t]){
+    peek(pl,nx,ny, to.t==="tree"?"Дерево":"Камень",
+         pl.name+" упёрся в "+TWORD[to.t]+" ("+DIRNAME[DIRS.findIndex(v=>v[0]===nx-pl.x&&v[1]===ny-pl.y)]+
+         ") и потерял ход.");
+    return;
+  }
+
+  // путь перегородила движущаяся стена
+  if(moverAt(nx,ny)){
+    peek(pl,nx,ny,"Движущаяся стена",
+         pl.name+" упёрся в движущуюся стену ("+DIRNAME[DIRS.findIndex(v=>v[0]===nx-pl.x&&v[1]===ny-pl.y)]+
+         ") и потерял ход.");
+    return;
+  }
+
+  // шипы, про которые игрок уже знает: лестница ложится через них мостиком
+  if(to.t==="spikes" && !to.ladder && pl.mem.has(key(nx,ny))){
+    if(pl.items.includes("ladder")){
+      ask(pl,"Яма с шипами",
+        `<p>Впереди открытые шипы. Лестницу можно перекинуть мостиком — она останется лежать
+            на шипах, и дальше там пройдёт кто угодно.</p>`,
+        [{label:"Перекинуть лестницу", main:true, cb:()=>{
+            closeModal();
+            pl.items.splice(pl.items.indexOf("ladder"),1);
+            to.ladder=true;
+            say(pl.name+" перекинул лестницу через шипы.");
+            doStep(pl,nx,ny);
+          }},
+         {label:"Не ходить", cb:()=>{ closeModal(); render(); }}], 0);
+    } else {
+      ask(pl,"Яма с шипами",
+        `<p>Впереди открытые шипы, перебраться нечем — нужна лестница.
+            Шаг туда стоит жизни.</p>`,
+        [{label:"Всё равно шагнуть", cb:()=>{ closeModal(); doStep(pl,nx,ny); }},
+         {label:"Остаться на месте", main:true, cb:()=>{ closeModal(); render(); }}], 1);
+    }
+    return;
+  }
+
+  if(to.t==="water" && !pl.onRaft){
+    const hasRaft = pl.items.includes("raft");
+    const raftHere = to.items.includes("raft");
+    if(!hasRaft && !raftHere){
+      peek(pl,nx,ny,"Вода",
+           pl.name+" шагнул в воду без плота, отскочил назад и потерял ход.");
+      return;
+    }
+    ask(pl,"Вода",
+      `<p>Впереди вода. ${raftHere
+         ? "На ней лежит плот — можно взять и плыть."
+         : "В рюкзаке есть плот. Он останется на воде, когда вы выйдете на сушу."}</p>`,
+      [{label:"Плыть на плоту", main:true, cb:()=>{
+          closeModal();
+          if(hasRaft) pl.items.splice(pl.items.indexOf("raft"),1);
+          else to.items.splice(to.items.indexOf("raft"),1);
+          pl.onRaft=true;
+          doStep(pl,nx,ny);
+        }},
+       {label:"Не лезть в воду", cb:()=>{
+          closeModal();
+          peek(pl,nx,ny,"Остались на берегу",
+               pl.name+" не стал мочить плот и потерял ход.");
+        }}], 0);
+    return;
+  }
+  doStep(pl,nx,ny);
+}
+
+function doStep(pl,nx,ny){
+  const ox=pl.x, oy=pl.y;
+  const from=C(ox,oy);
+  if(pl.onRaft && from.t==="water" && C(nx,ny).t!=="water"){
+    from.items.push("raft");
+    pl.onRaft=false;
+    say(pl.name+" вышел на сушу, плот остался на воде позади.");
+    remember(pl,ox,oy);              // иначе плот не появится на карте
+  }
+  pl.prev={x:ox, y:oy};
+  pl.x=nx; pl.y=ny;
+  arrive(pl);
+}
+
+function arrive(pl, skipBeast, skipHorse){
+  const c=C(pl.x,pl.y);
+
+  if(c.t==="spikes" && !c.ladder){
+    remember(pl,pl.x,pl.y);
+    say(pl.name+" в темноте наступил на шипы. Минус жизнь.");
+    render();
+    ask(pl,"Яма с шипами",
+      `<p class="findrow">🔺</p>
+       <p><b style="color:${pl.color}">${pl.name}</b> вслепую наступил на шипы. Минус одна жизнь. ${
+         pl.lives>1 ? "Осталось жизней: "+(pl.lives-1)+", возвращение в точку возрождения."
+                    : "Жизни кончились — игрок выбывает."}</p>`,
+      [{label:"Ладно", main:true,
+        cb:()=>{ closeModal(); death(pl,"шипы"); }}], 0);
+    return;
+  }
+  if(c.t==="pit" && !c.ladder){
+    remember(pl,pl.x,pl.y);
+    pl.stuck=true; pl.stuckTurns=0;
+    say(pl.name+" провалился в яму.");
+    // то, что лежит в яме, всё равно достаётся игроку
+  }
+
+  // зверь на этой же клетке
+  if(!skipBeast){
+    const bb=beastAt(pl.x,pl.y);
+    if(bb && bb.kind==="goat"){
+      meetGoat(pl, bb, ()=>{ if(pl.alive) arrive(pl,true,skipHorse); else endTurn(); });
+      return;
+    }
+    if(bb && bb.flee>0){                       // напуганный в драку не лезет
+      say(BNAME[bb.kind]+" шарахнулся в сторону — он всё ещё боится.");
+      fleeStep(bb);
+    } else if(bb){
+      const bx=pl.x, by=pl.y;
+      beastFight(bb, pl, ()=>{
+        if(pl.alive && pl.x===bx && pl.y===by && !beastAt(bx,by)) arrive(pl,true);
+        else endTurn();
+      });
+      return;
+    }
+  }
+
+  // лошадь на этой же клетке (та, на которой едут, не в счёт)
+  if(!skipHorse && !pl.riding){
+    const hs=horseAt(pl.x,pl.y);
+    if(hs && !hs.rider){ meetHorse(pl, hs, ()=>arrive(pl,true,true)); return; }
+  }
+
+  if(c.coins>0 || c.items.length){ showFind(pl, ()=>afterArrive(pl)); return; }
+  afterArrive(pl);
+}
+
+function afterArrive(pl){
+  const c=C(pl.x,pl.y);
+  remember(pl,pl.x,pl.y);
+  if(pl.stuck){ endTurn(); return; }
+  if(c.t==="exit"){ finish(pl); return; }
+
+  const mate=P.find(q=>q!==pl && q.alive && q.x===pl.x && q.y===pl.y);
+  if(mate){ meeting(pl, mate); return; }
+
+  endTurn();
+}
+
+/* находка: сперва показываем предмет на клетке, потом кладём в рюкзак */
+function showFind(pl, done){
+  const c=C(pl.x,pl.y);
+  const found=[];
+  if(c.coins>0) found.push({icon:IICON.coin, name:"Монеты ("+c.coins+")"});
+  c.items.forEach(i=>found.push({icon:IICON[i], name:INAME[i]}));
+  const names=found.map(f=>f.name).join(", ");
+
+  say(pl.name+" нашёл: "+names+".");
+  findShow={x:pl.x, y:pl.y};
+  render();
+
+  ask(pl,"Находка",
+    `<p class="findrow">${found.map(f=>f.icon).join(" ")}</p>
+     <p>На клетке лежит: <b>${names}</b>. Брать или оставить?</p>`,
+    [{label:"Забрать в рюкзак", main:true, cb:()=>{
+      closeModal();
+      if(c.coins>0){ pl.coins+=c.coins; c.coins=0; }
+      if(c.items.length){ pl.items.push(...c.items); c.items.length=0; }
+      findShow=null;
+      render();
+      say(names+" — в рюкзаке у "+pl.name+".");
+      flyToBag(found, ()=>done());
+    }},
+     {label:"Оставить на месте", cb:()=>{
+      closeModal();
+      findShow=null;
+      say(pl.name+" не стал поднимать: "+names+".");
+      render();
+      done();
+    }}], 0);
+}
+
+/* поднять то, что лежит под ногами, — отдельным ходом */
+function actPickup(){
+  const pl=P[cur], c=C(pl.x,pl.y);
+  if(!c.items.length && !c.coins) return;
+  const found=[];
+  if(c.coins>0) found.push({icon:IICON.coin, name:"Монеты ("+c.coins+")"});
+  c.items.forEach(i=>found.push({icon:IICON[i], name:INAME[i]}));
+  const names=found.map(f=>f.name).join(", ");
+  if(c.coins>0){ pl.coins+=c.coins; c.coins=0; }
+  if(c.items.length){ pl.items.push(...c.items); c.items.length=0; }
+  remember(pl,pl.x,pl.y);
+  say(pl.name+" поднял с земли: "+names+".");
+  render();
+  flyToBag(found, ()=>endTurn());
+}
+
+/* предмет перелетает с клетки в рюкзак */
+function flyToBag(found, done){
+  const pl=P[cur];
+  const cellEl=document.getElementById("board").children[idx(pl.x,pl.y)];
+  const bagEl=document.getElementById("pbag");
+  if(!cellEl || !bagEl){ done(); return; }
+  const a=cellEl.getBoundingClientRect(), b=bagEl.getBoundingClientRect();
+  found.forEach((f,n)=>{
+    const el=document.createElement("div");
+    el.className="flyer";
+    el.innerHTML=f.icon;
+    el.style.left=(a.left+a.width/2-18)+"px";
+    el.style.top =(a.top +a.height/2-18)+"px";
+    document.body.appendChild(el);
+    const dx=b.left+24+n*26-(a.left+a.width/2-18);
+    const dy=b.top +4-(a.top+a.height/2-18);
+    setTimeout(()=>{
+      el.style.transform=`translate(${dx}px, ${dy}px) scale(.62)`;
+      el.style.opacity=".2";
+    }, 20+n*60);
+    setTimeout(()=>el.remove(), 700+n*60);
+  });
+  setTimeout(done, 620+(found.length-1)*60);
+}
+
+/* ===================== действия ===================== */
+function actSkip(){
+  const pl=P[cur];
+  if(over || spyMode || !pl.alive) return;
+  say(pl.name+" осматривается и пропускает ход.");
+  skipped=true;                      // на месте не голодают
+  endTurn();
+}
+
+/* ===================== крафт ===================== */
+const countOf=(pl,k)=>pl.items.filter(i=>i===k).length;
+const canCraft=(pl,r)=>Object.keys(r.need).every(k=>countOf(pl,k)>=r.need[k]);
+const needText=r=>Object.keys(r.need)
+  .map(k=>r.need[k]+" "+plural(r.need[k], PLUR[k])).join(" + ");
+
+function actCraft(){
+  const pl=P[cur];
+  const ready=CRAFT.filter(r=>canCraft(pl,r));
+  const notYet=CRAFT.filter(r=>!canCraft(pl,r));
+
+  const opts=ready.map(r=>({
+    label: IICON[r.id]+" "+INAME[r.id]+" — "+needText(r),
+    cb: ()=>{ closeModal(); doCraft(pl,r); }
+  }));
+  opts.push({label:"Закрыть", main:true, cb:()=>closeModal()});
+
+  ask(pl,"Верстак",
+    `<p>В рюкзаке: ${["stick","plank","stone"].map(k=>
+        IICON[k]+" "+countOf(pl,k)+" "+plural(countOf(pl,k), PLUR[k])).join(", ")}.</p>` +
+    (notYet.length
+      ? `<p>Пока не хватает материалов на: ${notYet.map(r=>INAME[r.id].toLowerCase()+" ("+needText(r)+")").join(", ")}.</p>`
+      : "") +
+    (ready.length ? `<p>Что собираем?</p>` : `<p>Собрать пока нечего — нужны палки и доски.</p>`),
+    opts, opts.length-1);
+}
+
+function doCraft(pl, r){
+  Object.keys(r.need).forEach(k=>{
+    for(let i=0;i<r.need[k];i++) pl.items.splice(pl.items.indexOf(k),1);
+  });
+  pl.items.push(r.id);
+  say(pl.name+" смастерил: "+INAME[r.id]+".");
+  render();
+  flyToBag([{icon:IICON[r.id], name:INAME[r.id]}], ()=>endTurn());
+}
+
+/* разбить камень киркой — как срубить дерево, только нужен инструмент */
+function actMine(d){
+  const pl=P[cur];
+  if(!pl.items.includes("pick")) return;
+  const [nx,ny]=stepXY(pl.x,pl.y,d);
+  const c=C(nx,ny);
+  if(c.t!=="rock") return;
+  c.t="empty";
+  pl.items.push("stone");                         // с камня — один камень в рюкзак
+  remember(pl,nx,ny);
+  say(pl.name+" разбил камень ("+DIRNAME[d]+") киркой и забрал камень.");
+  render();
+  flyToBag([{icon:IICON.stone, name:"Камень"}], ()=>endTurn());
+}
+
+/* срубить соседнее дерево: клетка становится обычной землёй и больше не держит */
+function actChop(d){
+  const pl=P[cur];
+  const [nx,ny]=stepXY(pl.x,pl.y,d);
+  const c=C(nx,ny);
+  if(c.t!=="tree") return;
+  c.t="empty";
+  pl.items.push("stick","plank");                 // с каждого дерева палка и доска
+  remember(pl,nx,ny);
+  say(pl.name+" срубил дерево ("+DIRNAME[d]+"): путь свободен, в рюкзаке палка и доска.");
+  render();
+  flyToBag([{icon:IICON.stick,name:"Палка"},{icon:IICON.plank,name:"Доска"}], ()=>endTurn());
+}
+
+/* выбросить вещь на свою клетку: пусть достанется тому, кто сюда зайдёт */
+function actDrop(){
+  const pl=P[cur];
+  if(!pl.items.length) return;
+  const opts=pl.items.map((it,i)=>({label:IICON[it]+" "+INAME[it], cb:()=>{
+    closeModal();
+    pl.items.splice(i,1);
+    C(pl.x,pl.y).items.push(it);
+    remember(pl,pl.x,pl.y);
+    say(pl.name+" выбросил на землю: "+INAME[it]+".");
+    render();
+    endTurn();
+  }}));
+  opts.push({label:"Передумал", main:true, cb:()=>closeModal()});
+  ask(pl,"Что выбросить?",
+    `<p>Вещь останется лежать на этой клетке — её подберёт любой, кто сюда зайдёт,
+        включая вас. Это стоит хода.</p>`,
+    opts, opts.length-1);
+}
+
+function actEat(kind){
+  const pl=P[cur];
+  const i=pl.items.indexOf(kind);
+  if(i<0) return;
+  pl.items.splice(i,1);
+  const was=pl.food;
+  pl.food=Math.min(params.food, pl.food+FOOD[kind]);
+  const what=INAME[kind].toLowerCase();
+  if(pl.food===was) say(pl.name+" съел "+what+", хотя и так был сыт.");
+  else say(pl.name+" съел "+what+", полосок стало: "+pl.food+".");
+  endTurn();
+}
+
+/* рыбачить можно только стоя на воде, то есть с плота */
+const onWater = pl => C(pl.x,pl.y).t==="water";
+
+function actFish(){
+  const pl=P[cur];
+  if(!pl.items.includes("rod") || !onWater(pl)) return;
+  const luck=Math.random()<bite();
+  if(luck){
+    pl.items.push("fish");
+    say(pl.name+" закинул спиннинг и вытащил рыбу.");
+  } else say(pl.name+" закинул спиннинг, но не клюнуло.");
+  render();
+  ask(pl,"Рыбалка",
+    luck ? `<p class="findrow">🐟</p><p>Клюнуло! Рыба в рюкзаке — она стоит двух полосок голода.</p>`
+         : `<p class="findrow">🎣</p><p>Не клюнуло. Спиннинг цел, можно пробовать ещё.</p>`,
+    [{label:"Ладно", main:true, cb:()=>{ closeModal(); endTurn(); }}], 0);
+}
+
+function actClimb(){
+  const pl=P[cur], c=C(pl.x,pl.y);
+  if(!c.ladder){
+    pl.items.splice(pl.items.indexOf("ladder"),1);
+    c.ladder=true;
+    say(pl.name+" выбрался из ямы. Лестница осталась в яме.");
+  } else say(pl.name+" выбрался из ямы по оставленной лестнице.");
+  pl.stuck=false; pl.stuckTurns=0;
+  remember(pl,pl.x,pl.y);
+  endTurn();
+}
+
+function neighbourStuck(pl){
+  if(pl.stuck) return null;
+  for(let d=0;d<4;d++){
+    const v=edgeVal(pl.x,pl.y,d);
+    if(v===1||v===2) continue;
+    const [nx,ny]=stepXY(pl.x,pl.y,d);
+    if(!inB(nx,ny)) continue;
+    const q=P.find(z=>z.alive && z.stuck && z.x===nx && z.y===ny);
+    if(q) return q;
+  }
+  return null;
+}
+function actRescue(q){
+  const pl=P[cur];
+  q.x=pl.x; q.y=pl.y; q.stuck=false; q.stuckTurns=0;
+  remember(q,q.x,q.y);
+  say(pl.name+" вытащил из ямы: "+q.name+". Оба потратили ход.");
+  endTurn();
+}
+
+function actShop(){
+  const pl=P[cur];
+  const rows=Object.keys(PRICE).map(it=>{
+    const can = pl.coins>=PRICE[it];
+    return `<div class="row"><label>${IICON[it]} ${INAME[it]}</label>
+      <button data-buy="${it}" ${can?"":"disabled"}>Купить за ${PRICE[it]} ${SVG_COIN}</button></div>`;
+  }).join("");
+  modal("Магазин",
+    `<p>У вас ${pl.coins} ${SVG_COIN}. Покупка тратит ход. Всё это изредка попадается
+      и на поле, но здесь есть всегда.</p>${rows}`,
+    [{label:"Уйти без покупки", cb:()=>{ closeModal(); }}]);
+  document.querySelectorAll("[data-buy]").forEach(b=>{
+    b.onclick=()=>{
+      const it=b.dataset.buy;
+      pl.coins-=PRICE[it]; pl.items.push(it);
+      say(pl.name+" купил: "+INAME[it]+".");
+      closeModal(); endTurn();
+    };
+  });
+}
+
+function actSpy(){
+  spyMode={left:4};
+  say(P[cur].name+" достал подзорную трубу: выберите на карте четыре клетки.");
+  render();
+}
+function onCellClick(x,y){
+  if(!spyMode) return;
+  const pl=P[cur];
+  revealCell(pl,x,y);
+  spyMode.left--;
+  if(spyMode.left<=0){
+    pl.items.splice(pl.items.indexOf("spyglass"),1);
+    spyMode=null;
+    say(pl.name+" осмотрел четыре клетки. Труба пропала.");
+    render();
+    endTurn();
+  } else render();
+}
+
+/* ===================== встреча игроков ===================== */
+function meeting(a,b){
+  const choose=(who,next)=>ask(who,"Встреча на клетке",
+    `<p><b style="color:${who.color}">${who.name}</b>, ваш выбор. Второй игрок его пока не видит.</p>`,
+    [{label:"Мир", main:true, cb:()=>next("peace")},
+     {label:"Схватка", cb:()=>next("fight")}],
+    ()=>botMeets(who, who===a ? b : a));
+
+  choose(a, r1=>{ closeModal(); choose(b, r2=>{
+    closeModal();
+    if(r1==="peace" && r2==="peace") peaceDeal(a,b);
+    else fight(a,b);
+  });});
+}
+
+/* бот лезет в драку, если вооружён лучше или добыча того стоит */
+function botMeets(me, foe){
+  const mine=weapon(me), his=weapon(foe);
+  if(mine>his) return 1;
+  if(mine<his) return 0;
+  return (foe.items.length+foe.coins) > (me.items.length+me.coins) ? 1 : 0;
+}
+
+/* --- мир: можно разойтись, а можно обменяться --- */
+function peaceDeal(a,b){
+  say(a.name+" и "+b.name+" договорились о мире.");
+  if(a.bot || b.bot){ endTurn(); return; }    // боты не торгуются
+  modal("Мир",
+    `<p>Драки не будет. Разойтись или обменяться вещами?</p>`,
+    [{label:"Обменяться", main:true, cb:()=>{ closeModal(); tradeStep(a,b); }},
+     {label:"Разойтись", cb:()=>{ closeModal(); endTurn(); }}]);
+}
+
+function offerList(pl){
+  const o=pl.items.map((it,i)=>({kind:"item", i, label:IICON[it]+" "+INAME[it], name:INAME[it]}));
+  if(pl.coins>0) o.push({kind:"coins", label:SVG_COIN+" Все монеты ("+pl.coins+")",
+                         name:"монеты ("+pl.coins+")"});
+  o.push({kind:"none", label:"Ничего не отдаю", name:"ничего"});
+  return o;
+}
+
+function tradeStep(a,b){
+  const pickFrom=(who,next)=>modal("Обмен",
+    `<p><b style="color:${who.color}">${who.name}</b>, что отдаёте?</p>`,
+    offerList(who).map(o=>({label:o.label, cb:()=>{ closeModal(); next(o); }})));
+
+  pickFrom(a, ga=>pickFrom(b, gb=>{
+    modal("Обмен",
+      `<p><b style="color:${a.color}">${a.name}</b> отдаёт: ${ga.name}</p>
+       <p><b style="color:${b.color}">${b.name}</b> отдаёт: ${gb.name}</p>
+       <p>Сделка в силе, только если согласны оба.</p>`,
+      [{label:"Меняемся", main:true, cb:()=>{ closeModal(); doTrade(a,b,ga,gb); }},
+       {label:"Передумали", cb:()=>{ closeModal(); say("Обмен не состоялся."); endTurn(); }}]);
+  }));
+}
+
+function doTrade(a,b,ga,gb){
+  const give=(from,to,o)=>{
+    if(o.kind==="item"){ const it=from.items.splice(o.i,1)[0]; if(it) to.items.push(it); }
+    else if(o.kind==="coins"){ to.coins+=from.coins; from.coins=0; }
+  };
+  give(a,b,ga); give(b,a,gb);
+  say("Обмен состоялся: "+a.name+" отдал "+ga.name+", "+b.name+" отдал "+gb.name+".");
+  endTurn();
+}
+
+/* --- схватка --- */
+const roll=()=>1+rnd(6);
+function fight(a,b){
+  const wa=weapon(a), wb=weapon(b);
+
+  if(wa!==wb){                                   // оружие неравное — бросков нет
+    const win = wa>wb ? a : b, lose = wa>wb ? b : a;
+    say("Схватка: у "+win.name+" оружие лучше ("+weaponName(win)+
+        " против «"+weaponName(lose)+"»).");
+    ask(P[cur],"Схватка",
+      `<p class="findrow">${weaponIcon(win)}</p>
+       <p>У <b style="color:${win.color}">${win.name}</b> — ${weaponName(win)},
+          у соперника — ${weaponName(lose)}. Преимущество решает дело без кубика.</p>`,
+      [{label:"Дальше", main:true, cb:()=>spoils(win,lose)}], 0);
+    return;
+  }
+
+  let ra,rb,sa,sb,guard=0;
+  do{
+    ra=[roll(),roll(),roll()]; rb=[roll(),roll(),roll()];
+    sa=ra.reduce((x,y)=>x+y,0); sb=rb.reduce((x,y)=>x+y,0);
+    guard++;
+  } while(sa===sb && guard<20);
+
+  const win = sa>=sb ? a : b, lose = sa>=sb ? b : a;
+  ask(P[cur],"Схватка",
+    `<p>Оружие равное: ${weaponName(a)} против «${weaponName(b)}». Бросаем кубик по три раза.</p>
+     <div class="dice" style="color:${a.color}">${a.name}: ${ra.join(" ")} = <b>${sa}</b></div>
+     <div class="dice" style="color:${b.color}">${b.name}: ${rb.join(" ")} = <b>${sb}</b></div>
+     <p>Побеждает <b style="color:${win.color}">${win.name}</b>.</p>`,
+    [{label:"Дальше", main:true, cb:()=>spoils(win,lose)}], 0);
+  say("Схватка: "+win.name+" победил ("+Math.max(sa,sb)+" против "+Math.min(sa,sb)+").");
+}
+
+function spoils(win,lose){
+  const opts=[];
+  lose.items.forEach((it,i)=>opts.push({label:IICON[it]+" "+INAME[it], take:()=>{
+    lose.items.splice(i,1); win.items.push(it);
+    say(win.name+" забрал: "+INAME[it]+".");
+  }}));
+  if(lose.coins>0) opts.push({label:SVG_COIN+" Монеты ("+lose.coins+")", take:()=>{
+    win.coins+=lose.coins; say(win.name+" забрал монет: "+lose.coins+".");
+    lose.coins=0;
+  }});
+  const finishSpoils=()=>{
+    const c=C(lose.x,lose.y);
+    if(lose.items.length){
+      c.items.push(...lose.items);
+      say("Остальное из рюкзака осталось лежать на клетке.");
+      lose.items=[];
+    }
+    if(lose.coins>0){ c.coins+=lose.coins; lose.coins=0; }
+    remember(win,lose.x,lose.y); remember(lose,lose.x,lose.y);
+    closeModal();
+    death(lose,"схватка");
+  };
+  if(!opts.length){ finishSpoils(); return; }
+  ask(win,"Трофей",
+    `<p><b style="color:${win.color}">${win.name}</b>, выберите один предмет.</p>`,
+    opts.map(o=>({label:o.label, cb:()=>{ o.take(); finishSpoils(); }}))
+        .concat([{label:"Ничего не брать", cb:finishSpoils}]),
+    ()=>{ const k=opts.findIndex(o=>o.label.includes("Нож")); return k>=0?k:0; });
+}
+
+/* ===================== смерть и конец ===================== */
+function death(pl,reason,next){
+  // погиб в яме — рюкзак остаётся наверху, на клетке, с которой игрок туда шагнул
+  const drop = (reason==="яма" && inB(pl.prev.x,pl.prev.y)) ? pl.prev : {x:pl.x, y:pl.y};
+  const c=C(drop.x,drop.y);
+  if(reason!=="схватка"){                    // в схватке рюкзак уже разобран
+    if(pl.onRaft){ c.items.push("raft"); pl.onRaft=false; }
+    if(pl.items.length){
+      c.items.push(...pl.items); pl.items=[];
+      say(reason==="яма"
+        ? "Рюкзак остался наверху, на клетке перед ямой."
+        : "Рюкзак выпал на клетке, где "+pl.name+" погиб.");
+    }
+    remember(pl,drop.x,drop.y);              // место с вещами запоминается
+  }
+  if(pl.riding) dismount(pl, "Лошадь без седока ускакала.");
+  pl.onRaft=false; pl.stuck=false; pl.stuckTurns=0;
+  if(!endless) pl.lives--;                 // в лесу жизни не кончаются
+  if(!endless && pl.lives<=0){
+    pl.alive=false;
+    say(pl.name+" потерял последнюю жизнь и выбыл.");
+    if(P.every(q=>!q.alive)){ finish(null); return; }
+  } else {
+    pl.x=pl.spawn.x; pl.y=pl.spawn.y; pl.prev={x:pl.x, y:pl.y};
+    pl.food=params.food; pl.steps=0;          // возродился сытым
+    remember(pl,pl.x,pl.y);
+    say(pl.name+" возродился. Жизней осталось: "+pl.lives+".");
+  }
+  (next || endTurn)();
+}
+
+function finish(winner){
+  over=true; spyMode=null;
+  render();
+  if(endless){
+    const best=survRecord(), rec=round>best;
+    if(rec) survSave(round);
+    say("Выживание окончено на раунде "+round+".");
+    modal("Выживание окончено",
+      `<p class="findrow">🌲🐺</p>
+       <p>Продержались раундов: <b>${round}</b>.</p>
+       <p>${rec ? "Это новый рекорд." : "Рекорд пока "+best+"."}</p>`,
+      [{label:"Ещё раз", main:true, cb:()=>{ closeModal(); toSetup(); }}]);
+    return;
+  }
+  if(winner){
+    say(winner.name+" улетел на вертолёте. Победа!");
+    modal("Вертолёт улетел",
+      `<p><b style="color:${winner.color}">${winner.name}</b> добрался до вертолёта первым.</p>`,
+      [{label:"Новая игра", main:true, cb:()=>{ closeModal(); toSetup(); }}]);
+  } else {
+    say("Все игроки выбыли. Победило поле.");
+    modal("Поле победило", `<p>Никто не добрался до вертолёта.</p>`,
+      [{label:"Новая игра", main:true, cb:()=>{ closeModal(); toSetup(); }}]);
+  }
+}
+function toSetup(){
+  endless=false; lastView=null;
+  document.getElementById("game").hidden=true;
+  document.getElementById("editor").hidden=true;
+  document.getElementById("setup").hidden=false;
+}
+
+/* ===================== модалка ===================== */
+/* спросить игрока; за бота выбор делает pick (номер кнопки или функция) */
+function ask(actor, title, html, buttons, pick){
+  if(actor && actor.bot){
+    const n = typeof pick==="function" ? pick() : (pick|0);
+    const b = buttons[Math.max(0, Math.min(n, buttons.length-1))];
+    setTimeout(()=>b.cb(), 200);
+    return;
+  }
+  // вопрос уезжает на устройство того, кого спрашивают
+  if(isHost() && actor && actor.remote){
+    net.asks[actor.remote]={buttons};
+    net.ch.send({t:"ask", cid:actor.remote, title, html,
+                 buttons:buttons.map(b=>({label:b.label, main:!!b.main}))});
+    say("Ждём ответа: "+actor.name+".");
+    render();
+    return;
+  }
+  modal(title, html, buttons);
+}
+
+function modal(title, html, buttons){
+  const m=document.getElementById("modal"), box=document.getElementById("mbox");
+  box.innerHTML=`<h3>${title}</h3>${html}<div class="btns"></div>`;
+  const row=box.querySelector(".btns");
+  buttons.forEach(b=>{
+    const el=document.createElement("button");
+    el.innerHTML=b.label; if(b.main) el.className="main";
+    el.onclick=b.cb; row.appendChild(el);
+  });
+  m.hidden=false;
+  // Enter жмёт главную кнопку окна, а если главной нет — первую
+  const hot=row.querySelector("button.main") || row.querySelector("button");
+  if(hot){
+    hot.dataset.enter="1";
+    hot.innerHTML += "<kbd>Enter</kbd>";
+    hot.focus();
+  }
+}
+function closeModal(){ document.getElementById("modal").hidden=true; }
+
+/* ===================== редактор поля ===================== */
+const BAR = `<span style="display:inline-block;width:7px;height:21px;background:var(--wall);
+                border-radius:2px"></span>`;
+const TOOLS=[
+  {id:"wall",  ic:BAR,                      name:"Стена",   hint:"щёлкните ближе к нужной стороне клетки"},
+  {id:"door",  ic:"🚪",                      name:"Дверь",   hint:"тоже по стороне клетки, открывается ключом"},
+  {id:"empty", ic:`<i class="sw sw-grass"></i>`, name:"Земля", hint:"обычная проходимая клетка"},
+  {id:"water", ic:`<i class="sw sw-water"></i>`, name:"Вода", hint:"пройти можно только на плоту"},
+  {id:"pit",   ic:"🕳",                      name:"Яма",     hint:"держит, пока не найдётся лестница"},
+  {id:"spikes",ic:"🔺",                      name:"Шипы",    hint:"минус жизнь, если наступить вслепую"},
+  {id:"shop",  ic:"🏪",                      name:"Магазин", hint:"лестница, плот, труба и нож"},
+  {id:"exit",  ic:"🚁",                      name:"Вертолёт",hint:"точка выхода, повторный клик по другой клетке переносит"},
+  {id:"spawn", ic:"🏠",                      name:"Старт",   hint:"точка возрождения, повторный клик убирает"},
+  {id:"coin",  ic:SVG_COIN,                 name:"Монета",  hint:"каждый клик добавляет ещё одну"},
+  {id:"key",   ic:"🔑",                      name:"Ключ",    hint:"открывает одну дверь"},
+  {id:"ladder",ic:SVG_LADDER,               name:"Лестница",hint:"из ямы или мостиком через шипы"},
+  {id:"raft",  ic:"🛶",                      name:"Плот",    hint:"для воды"},
+  {id:"knife", ic:"🔪",                      name:"Нож",     hint:"шанс отбиться от волка и акулы"},
+  {id:"spyglass", ic:"🔭",                   name:"Труба",   hint:"одноразовая, открывает любые четыре клетки"},
+  {id:"steak", ic:"🥩",                      name:"Стейк",   hint:"возвращает одну полоску голода"},
+  {id:"rod",   ic:"🎣",                      name:"Спиннинг",hint:"им ловят рыбу, стоя на воде"},
+  {id:"hay",   ic:"🌾",                      name:"Сено",    hint:"им приманивают лошадь"},
+  {id:"horse", ic:"🐴",                      name:"Лошадь",  hint:"бродит по всей карте; повторный клик убирает"},
+  {id:"clear", ic:"🧹",                      name:"Очистить",hint:"убирает с клетки все предметы и монеты"},
+  {id:"wolf",  ic:"🐺",                      name:"Волк",    hint:"повторный клик убирает; область даётся сразу"},
+  {id:"shark", ic:"🦈",                      name:"Акула",   hint:"плавает по воде; повторный клик убирает"},
+  {id:"zone",  ic:"🚩",                      name:"Область", hint:"клик по зверю выбирает его, клики по клеткам добавляют и убирают их из области"},
+  {id:"mover", ic:"🧱",                      name:"Стена-ездок", hint:"два клика: начало и конец прямой дорожки"},
+  {id:"delmover", ic:"✖",                   name:"Убрать ездока", hint:"клик по любой клетке дорожки"}
+];
+
+function openEditor(p){
+  params=p;
+  let built=null;
+  for(let t=0;t<80 && !built;t++) built=generate(p);
+  if(!built){ alert("Не удалось собрать поле. Попробуйте размер побольше."); return; }
+  edit={tool:"wall", start:null, beast:null};
+  document.getElementById("setup").hidden=true;
+  document.getElementById("game").hidden=true;
+  document.getElementById("editor").hidden=false;
+  buildBoard("board2", edClick);
+  wallPreview();
+  buildPalette();
+  renderEdit();
+}
+
+/* подсветка той стороны клетки, куда ляжет стена или дверь */
+function wallPreview(){
+  const b=document.getElementById("board2");
+  const clear=()=>{
+    if(edit.hover) edit.hover.classList.remove("pw-t","pw-r","pw-b","pw-l");
+    edit.hover=null;
+  };
+  b.onmousemove=ev=>{
+    clear();
+    if(edit.tool!=="wall" && edit.tool!=="door") return;
+    const cell=ev.target.closest && ev.target.closest(".cell");
+    if(!cell) return;
+    const r=cell.getBoundingClientRect();
+    const dx=(ev.clientX-r.left)/r.width-0.5, dy=(ev.clientY-r.top)/r.height-0.5;
+    const d=Math.abs(dx)>Math.abs(dy) ? (dx>0?1:3) : (dy>0?2:0);
+    cell.classList.add("pw-"+["t","r","b","l"][d]);
+    edit.hover=cell;
+  };
+  b.onmouseleave=clear;
+}
+
+function buildPalette(){
+  const box=document.getElementById("palette");
+  box.innerHTML="";
+  TOOLS.forEach(t=>{
+    const b=document.createElement("div");
+    b.className="tile"+(t.id===edit.tool?" on":"");
+    b.innerHTML=`<span class="big">${t.ic}</span><span>${t.name}</span>`;
+    b.title=t.hint;
+    b.onclick=()=>{ edit.tool=t.id; edit.start=null; buildPalette(); renderEdit(); };
+    box.appendChild(b);
+  });
+  showTool();
+}
+
+function showTool(){
+  if(edit && edit.warnUntil && Date.now()<edit.warnUntil) return;   // не перебиваем предупреждение
+  const t=TOOLS.find(z=>z.id===edit.tool);
+  const el=document.getElementById("edsel");
+  if(!t || !el) return;
+  el.className="hum near";
+  const tail = edit.start ? "Начало дорожки поставлено, кликните вторую клетку."
+    : (edit.tool==="zone" && edit.beast)
+      ? `Выбран ${BNAME[edit.beast.kind].toLowerCase()} — в его области ${edit.beast.home.size} клеток.`
+      : "Кликните по клетке поля.";
+  el.innerHTML=`<span style="font-size:19px;vertical-align:-3px">${t.ic}</span>
+                <b style="color:var(--ink)">${t.name}</b> — ${t.hint}. ${tail}`;
+}
+
+function edClick(x,y,ev){
+  const t=edit.tool, c=C(x,y);
+
+  if(t==="wall" || t==="door"){
+    const r=ev.currentTarget.getBoundingClientRect();
+    const dx=(ev.clientX-r.left)/r.width-0.5, dy=(ev.clientY-r.top)/r.height-0.5;
+    const d = Math.abs(dx)>Math.abs(dy) ? (dx>0?1:3) : (dy>0?2:0);
+    if(!edgeRef(x,y,d)) return;                       // край поля не трогаем
+    const v=edgeVal(x,y,d);
+    edgeSet(x,y,d, t==="wall" ? (v===1?0:1) : (v===2?0:2));
+  }
+  else if(t==="exit"){
+    cells.forEach(z=>{ if(z.t==="exit") z.t="empty"; });
+    c.t="exit"; c.items=[]; c.coins=0; c.spawnOf=null; c.ladder=false;
+  }
+  else if(t==="spawn"){
+    if(c.t==="spawn"){ c.t="empty"; c.spawnOf=null; }
+    else{
+      const used=new Set(cells.filter(z=>z.t==="spawn").map(z=>z.spawnOf));
+      let n=0; while(used.has(n)) n++;
+      c.t="spawn"; c.spawnOf=n; c.items=[]; c.coins=0; c.ladder=false;
+    }
+  }
+  else if(["empty","water","pit","spikes","shop"].includes(t)){
+    c.t=t; c.spawnOf=null; c.ladder=false;
+    if(t!=="empty" && t!=="shop"){ c.items=[]; c.coins=0; }
+  }
+  else if(t==="coin") c.coins++;
+  else if(["key","ladder","raft","knife","spyglass","steak","rod","hay"].includes(t)) c.items.push(t);
+  else if(t==="horse"){
+    const i=horses.findIndex(z=>z.x===x && z.y===y);
+    if(i>=0) horses.splice(i,1); else horses.push({x,y});
+  }
+  else if(t==="clear"){ c.items=[]; c.coins=0; c.ladder=false; }
+  else if(t==="wolf" || t==="shark"){
+    const i=beasts.findIndex(z=>z.x===x && z.y===y);
+    if(i>=0){
+      if(beasts[i]===edit.beast) edit.beast=null;
+      beasts.splice(i,1);
+    } else {
+      const b={kind:t, x, y, flee:0, hurt:0, home:beastHome(t,x,y,params.area)};
+      beasts.push(b);
+      edit.beast=b;
+    }
+  }
+  else if(t==="zone"){
+    const b=beastAt(x,y);
+    if(b) edit.beast=b;                        // выбрали зверя, подсказка обновится сама
+    else if(!edit.beast) warn("Сначала кликните по зверю, чью область рисуем.");
+    else{
+      const k=key(x,y);
+      if(edit.beast.home.has(k)) edit.beast.home.delete(k);
+      else edit.beast.home.add(k);
+    }
+  }
+  else if(t==="mover"){
+    if(!edit.start){ edit.start=[x,y]; }
+    else{
+      const run=straightPath(edit.start[0], edit.start[1], x, y);
+      edit.start=null;
+      if(run) movers.push({path:run, i:0, step:1});
+      else warn("Дорожка должна быть прямой, от трёх клеток, по пустой земле и без стен поперёк.");
+    }
+  }
+  else if(t==="delmover"){
+    const i=movers.findIndex(m=>m.path.some(s=>s[0]===x && s[1]===y));
+    if(i>=0) movers.splice(i,1);
+  }
+  renderEdit();
+}
+
+function straightPath(sx,sy,tx,ty){
+  if(sx!==tx && sy!==ty) return null;
+  const d = sx===tx ? (ty>sy?2:0) : (tx>sx?1:3);
+  const len = Math.abs(tx-sx)+Math.abs(ty-sy)+1;
+  if(len<3) return null;
+  const run=[]; let cx=sx, cy=sy;
+  for(let i=0;i<len;i++){
+    if(!inB(cx,cy) || C(cx,cy).t!=="empty") return null;
+    run.push([cx,cy]);
+    if(i<len-1){
+      if(edgeVal(cx,cy,d)===1 || edgeVal(cx,cy,d)===2) return null;
+      [cx,cy]=stepXY(cx,cy,d);
+    }
+  }
+  return run;
+}
+
+function renderEdit(){
+  const b=document.getElementById("board2");
+  const side=["t","r","b","l"];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const el=b.children[idx(x,y)], c=C(x,y);
+    el.className="cell t-"+c.t;            // поле в полную яркость, как в игре
+    if(beasts.some(z=>z!==edit.beast && inHome(z,x,y))) el.classList.add("zone");
+    if(edit.beast && inHome(edit.beast,x,y)) el.classList.add("zone-on");
+    if(edit.start && edit.start[0]===x && edit.start[1]===y) el.classList.add("pick");
+
+    const marks=[];
+    if(c.coins) marks.push(IICON.coin);
+    c.items.forEach(i=>marks.push(IICON[i]));
+    if(c.ladder) marks.push(IICON.ladder);
+    const bb=beastAt(x,y); if(bb) marks.push(BICON[bb.kind]);
+    if(horseAt(x,y)) marks.push(HORSE);
+    if(movers.some(m=>m.path.some(s=>s[0]===x && s[1]===y))) el.classList.add("moverpath");
+    if(moverAt(x,y)) el.classList.add("mover");
+    const terr=TICON[c.t]||"";
+    el.innerHTML = `<span class="ic">${marks.length?marks[0]:terr}</span>`
+      + (marks.length && terr ? `<span class="corner">${terr}</span>` : "")
+      + (marks.length>1 ? `<span class="sub">${marks.slice(1).join("")}</span>` : "")
+      + (c.t==="spawn" ? `<span class="mates" style="color:${COLORS[c.spawnOf]||"#fff"}">${c.spawnOf+1}</span>` : "");
+
+    for(let d=0;d<4;d++){
+      const v=edgeVal(x,y,d);
+      if(v===1) el.classList.add("w-"+side[d]);
+      else if(v===2) el.classList.add("d-"+side[d]);
+      else if(v===3) el.classList.add("o-"+side[d]);
+    }
+  }
+  edStat(); showTool();
+}
+
+function warn(msg){
+  const el=document.getElementById("edsel");
+  edit.warnUntil=Date.now()+2200;
+  el.className="hum far";
+  el.innerHTML=`<b style="color:var(--ink)">${msg}</b>`;
+  setTimeout(()=>{ edit.warnUntil=0; showTool(); }, 2200);
+}
+
+function edSpawns(){
+  const sp=[];
+  cells.forEach((c,i)=>{ if(c.t==="spawn" && c.spawnOf!=null) sp[c.spawnOf]=[i%W, (i-(i%W))/W]; });
+  return sp;
+}
+
+function edStat(){
+  const exits=cells.filter(c=>c.t==="exit").length;
+  const sp=edSpawns().filter(Boolean).length;
+  const w=beasts.filter(b=>b.kind==="wolf").length, s=beasts.filter(b=>b.kind==="shark").length;
+  document.getElementById("edstat").innerHTML =
+    `<span>🚁 ${exits}</span><span>🏠 ${sp}</span><span>🐺 ${w}</span><span>🦈 ${s}</span>
+     <span>🧱 дорожек: ${movers.length}</span>
+     <span>🏪 ${cells.filter(c=>c.t==="shop").length}</span>
+     <span>игроков: ${params.players}</span>`;
+}
+
+/* Ведущий сам отвечает за поле: никаких проверок перед стартом.
+   Единственное, что делаем, — доставляем недостающие точки возрождения,
+   иначе игроку просто негде появиться. */
+function edPlay(){
+  const raw=edSpawns(), sp=[];
+  for(let i=0;i<params.players;i++){
+    if(raw[i]){ sp.push(raw[i]); continue; }
+    const spot=freeSpot(sp);
+    const c=cells[idx(spot[0],spot[1])];
+    c.t="spawn"; c.spawnOf=i; c.items=[]; c.coins=0;
+    sp.push(spot);
+  }
+  startGame(sp);
+}
+
+function freeSpot(taken){
+  for(let t=0;t<600;t++){
+    const x=rnd(W), y=rnd(H), c=C(x,y);
+    if(c.t==="exit" || c.t==="spawn" || c.t==="water" || c.t==="pit" || c.t==="spikes") continue;
+    if(taken.some(s=>s && s[0]===x && s[1]===y)) continue;
+    if(beastAt(x,y) || moverAt(x,y)) continue;
+    return [x,y];
+  }
+  return [0,0];
+}
+
+/* пустое поле: ни стен, ни ландшафта, ни зверей — рисуем с нуля */
+function clearMap(){
+  modal("Очистить карту",
+    `<p>С поля исчезнет всё: стены и двери, ландшафт, предметы, звери, дорожки,
+        вертолёт и точки возрождения. Останется голая земля ${W}×${H}.</p>
+     <p>Вернуть это нельзя — разве что заново нажать «Заполнить случайно».</p>`,
+    [{label:"Отмена", main:true, cb:()=>closeModal()},
+     {label:"Да, очистить", cb:()=>{
+        closeModal();
+        cells=[];
+        for(let i=0;i<W*H;i++) cells.push({t:"empty",items:[],coins:0,ladder:false,spawnOf:null});
+        eV=grid(H, Math.max(W-1,0), 0);
+        eH=grid(Math.max(H-1,0), W, 0);
+        beasts=[]; movers=[];
+        edit.start=null; edit.beast=null;
+        renderEdit();
+        warn("Поле пустое. Поставьте вертолёт и точки возрождения.");
+      }}]);
+}
+
+/* ===================== сохранение карты ===================== */
+function mapToText(){
+  return JSON.stringify({
+    v:3, W, H, params,
+    cells: cells.map(c=>[c.t, c.items, c.coins, c.ladder?1:0, c.spawnOf==null?-1:c.spawnOf]),
+    eV, eH,
+    beasts: beasts.map(b=>[b.kind, b.x, b.y, Array.from(b.home)]),
+    movers: movers.map(m=>m.path),
+    horses: horses.map(h=>[h.x,h.y])
+  });
+}
+
+/* значения на случай, если карта сохранена старой версией игры */
+const DEFAULTS={w:12,h:12,players:2,bots:1,lives:3,coins:0,hear:3,open:0.4,
+                wolves:1,sharks:1,movers:1,area:3,food:5,bite:35,horses:1};
+
+function mapFromText(txt){
+  const d=JSON.parse(txt);
+  if(!d || (d.v!==2 && d.v!==3)) throw new Error("не та карта");
+  W=d.W; H=d.H;
+  params=Object.assign({}, DEFAULTS, d.params||{}, {w:d.W, h:d.H});
+  cells=d.cells.map(a=>({t:a[0], items:a[1], coins:a[2], ladder:!!a[3],
+                         spawnOf:a[4]<0?null:a[4]}));
+  eV=d.eV; eH=d.eH;
+  beasts=d.beasts.map(a=>{
+    let home;
+    if(Array.isArray(a[3])) home=new Set(a[3]);          // новая карта: список клеток
+    else{                                                 // старая: прямоугольник
+      home=new Set();
+      for(let y=a[4];y<=a[6];y++) for(let x=a[3];x<=a[5];x++) home.add(key(x,y));
+    }
+    return {kind:a[0], x:a[1], y:a[2], flee:0, hurt:0, home};
+  });
+  movers=d.movers.map(p=>({path:p, i:0, step:1}));
+  horses=(d.horses||[]).map(a=>({x:a[0], y:a[1]}));
+  return upgradeMap();
+}
+
+/* дописываем на старую карту то, чего в ней ещё не было: еду, снасти, лошадей */
+function upgradeMap(){
+  const has=item=>cells.some(c=>c.items.includes(item));
+  const plain=[];
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++)
+    if(C(x,y).t==="empty") plain.push([x,y]);
+  const take=()=>plain.length ? plain.splice(rnd(plain.length),1)[0] : null;
+  const put=(item,n)=>{ for(let i=0;i<n;i++){ const s=take(); if(s) cells[idx(s[0],s[1])].items.push(item); } };
+
+  const added=[];
+  if(!has("knife")){    put("knife",    1+Math.floor(W*H/200)); added.push("ножи"); }
+  if(!has("spyglass")){ put("spyglass", 1+Math.floor(W*H/200)); added.push("подзорные трубы"); }
+  if(params.food && !has("steak")){ put("steak", 2+Math.floor(W*H/90)); added.push("стейки"); }
+  if(cells.some(c=>c.t==="water") && !has("rod")){
+    put("rod", 1+Math.floor(W*H/250)); added.push("спиннинги");
+  }
+  if(params.horses && !has("hay")){ put("hay", 1+Math.floor(W*H/150)); added.push("сено"); }
+  if(params.horses && !horses.length){
+    for(let i=0;i<params.horses;i++){ const s=take(); if(s) horses.push({x:s[0], y:s[1]}); }
+    added.push("лошади");
+  }
+  return added;
+}
+
+/* --- полка сохранённых карт --- */
+const MAPS_KEY="labirint-maps";
+
+function mapStore(){
+  let obj={};
+  try{ obj=JSON.parse(localStorage.getItem(MAPS_KEY)||"{}") || {}; }catch(e){ obj={}; }
+  if(!Object.keys(obj).length){                      // переносим единственную старую карту
+    try{
+      const old=localStorage.getItem("labirint-map");
+      if(old){ obj={"Старая карта":old}; mapStoreSet(obj); }
+    }catch(e){}
+  }
+  return obj;
+}
+function mapStoreSet(obj){
+  try{ localStorage.setItem(MAPS_KEY, JSON.stringify(obj)); return true; }
+  catch(e){ return false; }
+}
+
+const TA_STYLE="width:100%;height:120px;background:#11161f;color:#cfe0f5;"+
+               "border:1px solid #2a3647;border-radius:8px;padding:8px;font:12px monospace";
+
+function mapListHTML(store, action){
+  const names=Object.keys(store);
+  if(!names.length) return `<p>Сохранённых карт пока нет.</p>`;
+  return `<div id="maplist">` + names.map(n=>{
+    const size=Math.round(store[n].length/1024*10)/10;
+    return `<div class="row" style="gap:8px;margin:6px 0">
+      <button data-pick="${encodeURIComponent(n)}" style="flex:1;text-align:left">
+        ${n} <span style="opacity:.6">· ${size} КБ</span></button>
+      <button data-del="${encodeURIComponent(n)}" title="Удалить">✖</button></div>`;
+  }).join("") + `</div><p style="margin-top:10px">${action}</p>`;
+}
+
+function wireMapList(store, onPick, redraw){
+  document.querySelectorAll("[data-pick]").forEach(b=>{
+    b.onclick=()=>onPick(decodeURIComponent(b.dataset.pick));
+  });
+  document.querySelectorAll("[data-del]").forEach(b=>{
+    b.onclick=()=>{
+      const n=decodeURIComponent(b.dataset.del);
+      delete store[n]; mapStoreSet(store); redraw();
+    };
+  });
+}
+
+function saveMapDialog(){
+  const store=mapStore();
+  const draw=()=>{
+    const def="Карта "+(Object.keys(store).length+1);
+    modal("Сохранить карту",
+      `<p>Имя для этой карты:</p>
+       <div class="row" style="gap:8px"><input id="mapname" value="${def}"
+          style="flex:1;background:#11161f;color:#e8edf5;border:1px solid #2a3647;
+                 border-radius:8px;padding:7px 10px;font:inherit">
+         <button id="mapsave" class="main">Сохранить</button></div>
+       ${Object.keys(store).length ? "<p>Уже сохранены — клик по имени перезапишет её этой картой:</p>" : ""}
+       ${mapListHTML(store,"Та же карта текстом — скопируйте, если хотите сложить в файл:")}
+       <textarea id="maptext" style="${TA_STYLE}"></textarea>`,
+      [{label:"Готово", main:true, cb:()=>closeModal()}]);
+    document.getElementById("maptext").value=mapToText();
+    document.getElementById("mapsave").onclick=()=>{
+      const name=(document.getElementById("mapname").value||"").trim();
+      if(!name) return;
+      store[name]=mapToText();
+      if(!mapStoreSet(store)) alert("Браузер не дал сохранить карту. Скопируйте текст ниже в файл.");
+      draw();
+    };
+    wireMapList(store, n=>{                        // клик по имени — перезаписать
+      store[n]=mapToText(); mapStoreSet(store); draw();
+    }, draw);
+  };
+  draw();
+}
+
+function applyMap(txt){
+  let added;
+  try{ added=mapFromText(txt); }
+  catch(e){ alert("Не получилось прочитать карту: "+e.message); return false; }
+  closeModal();
+  edit={tool:"wall", start:null, beast:null};
+  document.getElementById("setup").hidden=true;
+  document.getElementById("game").hidden=true;
+  document.getElementById("editor").hidden=false;
+  buildBoard("board2", edClick);
+  wallPreview();
+  buildPalette(); renderEdit();
+  if(added && added.length)
+    warn("Карта приведена к новым правилам, добавлено: "+added.join(", ")+".");
+  return true;
+}
+
+function loadMapDialog(){
+  const store=mapStore();
+  const draw=()=>{
+    modal("Загрузить карту",
+      mapListHTML(store,"Или вставьте текст карты и нажмите «Загрузить из текста»:") +
+      `<textarea id="maptext" style="${TA_STYLE}"></textarea>`,
+      [{label:"Загрузить из текста", main:true, cb:()=>{
+          const txt=(document.getElementById("maptext").value||"").trim();
+          if(txt) applyMap(txt);
+        }},
+       {label:"Отмена", cb:()=>closeModal()}]);
+    wireMapList(store, n=>applyMap(store[n]), draw);
+  };
+  draw();
+}
+
+/* ===================== сеть =====================
+   Хост держит у себя весь движок. Игрокам уходит только их личный вид
+   и список кнопок; правила и карта на чужие устройства не попадают. */
+let net=null, clientBoard=null, hostSeat=null;   // hostSeat — место хоста, null если он только ведущий
+
+/* --- транспорт ---
+   Канал нужен только чтобы передавать сообщения: ни таблиц, ни схемы.
+   Вкладки — для отладки на одном компьютере, Supabase — для разных устройств. */
+const SUPA_URL = "https://pqvdeoyhrfqjihqzdgpo.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxdmRlb3locmZxamlocXpkZ3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4Njc2OTAsImV4cCI6MjEwNDQ0MzY5MH0.uhabY8SiE_dkG3y8WrhGAwzuNYtGBtrjU9gqSHrXC3g";
+
+let makeChannel = (room, onMsg) => {
+  const bc=new BroadcastChannel("labirint:"+room);
+  bc.onmessage=e=>onMsg(e.data);
+  return Promise.resolve({send:m=>bc.postMessage(m), close:()=>bc.close()});
+};
+
+function loadSupabase(){
+  if(window.supabase) return Promise.resolve(window.supabase);
+  return new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+    s.onload=()=>window.supabase ? res(window.supabase) : rej(new Error("библиотека не поднялась"));
+    s.onerror=()=>rej(new Error("не удалось загрузить supabase-js — нет интернета?"));
+    document.head.appendChild(s);
+  });
+}
+
+function makeNetChannel(room, onMsg){
+  return loadSupabase().then(lib=>{
+    const sb=lib.createClient(SUPA_URL, SUPA_KEY);
+    const ch=sb.channel("labirint-"+room, {config:{broadcast:{self:false}}});
+    return new Promise((res,rej)=>{
+      const timer=setTimeout(()=>rej(new Error("канал не отозвался")), 15000);
+      ch.on("broadcast", {event:"m"}, p=>onMsg(p.payload))
+        .subscribe(st=>{
+          if(st==="SUBSCRIBED"){
+            clearTimeout(timer);
+            res({send:m=>ch.send({type:"broadcast", event:"m", payload:m}),
+                 close:()=>sb.removeChannel(ch)});
+          } else if(st==="CHANNEL_ERROR" || st==="TIMED_OUT"){
+            clearTimeout(timer); rej(new Error("связь не установилась ("+st+")"));
+          }
+        });
+    });
+  });
+}
+
+const channelFactory = () =>
+  document.getElementById("netonline").checked ? makeNetChannel : makeChannel;
+
+const netSay = html => { document.getElementById("netinfo").innerHTML=html; };
+const isClient = () => !!net && net.role==="client";
+const isHost   = () => !!net && net.role==="host";
+
+function sendAct(id){
+  if(!isClient()) return false;
+  net.ch.send({t:"act", cid:net.cid, id});
+  return true;
+}
+
+/* --- хост --- */
+function hostCreate(){
+  const room=String(1000+Math.floor(Math.random()*9000));
+  const me={role:"host", room, cid:"host", seats:[], asks:{}, ch:null};
+  net=me;
+  netSay("Поднимаем канал…");
+  channelFactory()(room, hostMsg).then(ch=>{
+    me.ch=ch;
+    netSay("Код партии: <b style='font-size:22px;color:var(--ink)'>"+room+"</b><br>"+
+           "Откройте эту же страницу на других устройствах, введите код и имя.");
+    document.getElementById("netstartrow").hidden=false;
+    drawSeats();
+  }).catch(e=>{ net=null; netSay("Не вышло создать партию: "+e.message); });
+}
+
+const seatsNeeded = () => {
+  const total=Number(document.getElementById("pl").value);
+  return Math.max(0, total - (document.getElementById("netplay").checked ? 1 : 0));
+};
+
+function drawSeats(){
+  const list=document.getElementById("netlist");
+  if(!isHost()) return;
+  const need=seatsNeeded(), have=net.seats.length;
+  const who = net.seats.length
+    ? "Подключились: " + net.seats.map(s=>"<b>"+s.name+"</b>").join(", ")
+    : "Пока никто не подключился.";
+  list.innerHTML = who + "<br>Нужно подключений: <b>" + need + "</b>" +
+    (document.getElementById("netplay").checked ? " (вы играете сами и занимаете одно место)" : " (вы только ведущий)") +
+    (have>=need && need>0 ? " — можно начинать." : "");
+}
+
+function hostMsg(m){
+  if(!isHost()) return;
+  if(m.t==="join"){
+    if(net.seats.some(s=>s.cid===m.cid) || net.seats.length>=seatsNeeded()) return;
+    net.seats.push({cid:m.cid, name:(m.name||"Игрок").slice(0,14)});
+    net.ch.send({t:"seat", cid:m.cid, n:net.seats.length+1});
+    drawSeats();
+  }
+  else if(m.t==="act"){
+    const pl=P[cur];
+    if(over || !pl || pl.remote!==m.cid) return;        // чужой ход — не принимаем
+    doAct(pl, m.id);
+  }
+  else if(m.t==="cell"){
+    const pl=P[cur];
+    if(over || !pl || pl.remote!==m.cid) return;
+    onCellClick(m.x, m.y);
+  }
+  else if(m.t==="answer"){
+    const a=net.asks[m.cid];
+    if(!a) return;
+    delete net.asks[m.cid];
+    const b=a.buttons[m.i];
+    if(b && b.cb) b.cb();
+  }
+}
+
+function hostStart(){
+  const p=readParams();
+  const plays=document.getElementById("netplay").checked;
+  const need=seatsNeeded();
+  if(net.seats.length<need){
+    netSay("Не хватает игроков: подключилось "+net.seats.length+" из "+need+".");
+    return;
+  }
+  net.seats=net.seats.slice(0,need);
+  net.hostPlays=plays;
+  p.bots=0;                                  // по сети играют люди
+  document.getElementById("netcard").hidden=true;
+  newGame(p);
+}
+
+/* каждому удалённому игроку — его собственный вид, и ничего больше */
+function pushViews(){
+  if(!isHost()) return;
+  const saved=watch; watch=false;                      // чужому наблюдателя не отдаём
+  P.forEach(pl=>{
+    if(!pl.remote) return;
+    net.ch.send({t:"view", cid:pl.remote, view:buildView(pl,pl)});
+  });
+  watch=saved;
+}
+
+/* --- игрок --- */
+function clientJoin(){
+  const room=(document.getElementById("netcode").value||"").trim();
+  const name=(document.getElementById("netname").value||"Игрок").trim();
+  if(!room) { netSay("Введите код партии."); return; }
+  const me={role:"client", room, cid:"c"+Math.random().toString(36).slice(2,8), seat:null, ch:null};
+  net=me;
+  netSay("Подключаемся к партии "+room+"…");
+  channelFactory()(room, clientMsg).then(ch=>{
+    me.ch=ch;
+    ch.send({t:"join", cid:me.cid, name});
+    netSay("Канал есть, ждём ответа хоста…");
+    setTimeout(()=>{ if(me.seat===null) ch.send({t:"join", cid:me.cid, name}); }, 2500);
+  }).catch(e=>{ net=null; netSay("Не вышло подключиться: "+e.message); });
+}
+
+function clientMsg(m){
+  if(!isClient() || (m.cid && m.cid!==net.cid)) return;
+  if(m.t==="seat"){
+    net.seat=m.n;
+    netSay("Вы в партии, игрок "+m.n+". Ждём, пока хост начнёт.");
+  }
+  else if(m.t==="view"){
+    document.getElementById("setup").hidden=true;
+    document.getElementById("editor").hidden=true;
+    document.getElementById("game").hidden=false;
+    // партией распоряжается хост: игроку эти кнопки ни к чему
+    document.getElementById("again").hidden=true;
+    document.getElementById("watchbtn").hidden=true;
+    const v=m.view;
+    if(!clientBoard || clientBoard.w!==v.w || clientBoard.h!==v.h){
+      clientBoard={w:v.w, h:v.h};
+      buildClientBoard(v.w, v.h);
+    }
+    paint(v);
+  }
+  else if(m.t==="ask"){
+    modal(m.title, m.html, m.buttons.map((b,i)=>({
+      label:b.label, main:b.main,
+      cb:()=>{ closeModal(); net.ch.send({t:"answer", cid:net.cid, i}); }
+    })));
+  }
+  else if(m.t==="log"){ say(m.text); }
+}
+
+function buildClientBoard(w,h){
+  const b=document.getElementById("board");
+  const cs=Math.max(22, Math.min(46, Math.floor(620/Math.max(w,h))));
+  b.style.setProperty("--cs", cs+"px");
+  b.style.gridTemplateColumns=`repeat(${w}, ${cs}px)`;
+  b.innerHTML="";
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const d=document.createElement("div");
+    d.className="cell"; d.style.width=cs+"px"; d.style.height=cs+"px";
+    d.addEventListener("click", ()=>{
+      if(!lastView) return;
+      net.ch.send({t:"cell", cid:net.cid, x:lastView.ox+x, y:lastView.oy+y});
+    });
+    b.appendChild(d);
+  }
+}
+
+/* ===================== ввод ===================== */
+document.querySelectorAll(".pad button").forEach(b=>{
+  b.onclick=()=>{ const d=Number(b.dataset.d); if(!sendAct("move:"+d)) move(d); };
+});
+document.addEventListener("keydown",e=>{
+  const m=document.getElementById("modal");
+  const focused=document.activeElement;
+  const onButton = focused && focused.tagName==="BUTTON";
+  if(!m.hidden){
+    if(e.key==="Enter"){
+      if(onButton && m.contains(focused)) return;   // кнопка под фокусом нажмётся сама
+      e.preventDefault();
+      const b=m.querySelector("button[data-enter]");
+      if(b) b.click();
+    }
+    return;
+  }
+  if(document.getElementById("game").hidden) return;
+  if(!isClient() && P[cur] && P[cur].bot) return;     // ходит бот, клавиши не мешают
+  if(e.key==="Enter"){
+    if(onButton) return;                            // выбранную кнопку жмёт браузер
+    e.preventDefault();
+    if(!sendAct("skip")) actSkip();
+    return;
+  }
+  const map={ArrowUp:0,KeyW:0,ArrowRight:1,KeyD:1,ArrowDown:2,KeyS:2,ArrowLeft:3,KeyA:3};
+  if(e.code in map){
+    e.preventDefault();
+    if(!sendAct("move:"+map[e.code])) move(map[e.code]);
+  }
+});
+document.getElementById("again").onclick=toSetup;
+document.getElementById("watchbtn").onclick=()=>{
+  watch=!watch;
+  document.getElementById("watchbtn").innerHTML = watch ? "👁 Вернуть вслепую" : "👁 Смотреть за полем";
+  document.getElementById("watchbtn").className = watch ? "main" : "";
+  document.getElementById("watchbar").hidden = !watch;
+  if(watch) say("Включён режим наблюдателя: видно всё поле.");
+  else say("Режим наблюдателя выключен.");
+  render();
+};
+
+/* после клика мышью кнопка отпускает фокус, иначе Enter нажмёт её повторно */
+document.addEventListener("click",e=>{
+  const b=e.target.closest ? e.target.closest("button") : null;
+  if(b && e.detail>0) b.blur();
+});
+
+/* ползунки */
+function bind(id,out,fmt){
+  const i=document.getElementById(id), o=document.getElementById(out);
+  const upd=()=>o.textContent=fmt(Number(i.value));
+  i.oninput=upd; upd();
+}
+bind("sz","szo",v=>v+" × "+v);
+bind("pl","plo",v=>String(v));
+bind("lv","lvo",v=>String(v));
+bind("cn","cno",v=>String(v));
+bind("hr","hro",v=>v===0?"без подсказки":v===1?"1 клетка":v<5?v+" клетки":v+" клеток");
+bind("op","opo",v=>v+" %");
+bind("bt","bto",v=>String(v));
+bind("wf","wfo",v=>String(v));
+bind("sh","sho",v=>String(v));
+bind("mv","mvo",v=>String(v));
+bind("ar","aro",v=>v+" клетки");
+bind("fd","fdo",v=>v===0?"без голода":String(v));
+bind("bi","bio",v=>v+" %");
+bind("ho","hoo",v=>String(v));
+bind("gt","gto",v=>String(v));
+
+function readParams(){
+  const v=id=>Number(document.getElementById(id).value);
+  return {w:v("sz"), h:v("sz"), players:v("pl"), bots:Math.min(v("bt"), v("pl")),
+          lives:v("lv"), coins:v("cn"), hear:v("hr"), open:v("op")/100,
+          wolves:v("wf"), sharks:v("sh"), movers:v("mv"), area:v("ar"), food:v("fd"),
+          bite:v("bi"), horses:v("ho"), goats:v("gt")};
+}
+
+document.getElementById("start").onclick   = ()=>newGame(readParams());
+document.getElementById("surv").onclick    = ()=>startSurvival(readParams());
+document.getElementById("netopen").onclick = ()=>{
+  const c=document.getElementById("netcard");
+  c.hidden=!c.hidden;
+};
+document.getElementById("nethost").onclick = hostCreate;
+document.getElementById("netjoin").onclick = clientJoin;
+document.getElementById("netstart").onclick= hostStart;
+document.getElementById("netplay").onchange= ()=>{ if(isHost()) drawSeats(); };
+document.getElementById("pl").addEventListener("input", ()=>{ if(isHost()) drawSeats(); });
+document.getElementById("toedit").onclick  = ()=>openEditor(readParams());
+document.getElementById("loadmap").onclick = loadMapDialog;
+document.getElementById("edplay").onclick  = edPlay;
+document.getElementById("edsave").onclick  = saveMapDialog;
+document.getElementById("edclear").onclick = clearMap;
+document.getElementById("edrandom").onclick= ()=>{
+  let built=null;
+  for(let t=0;t<80 && !built;t++) built=generate(params);
+  if(!built){ alert("Не получилось собрать поле."); return; }
+  edit.start=null; renderEdit();
+};
+document.getElementById("edback").onclick  = ()=>{
+  document.getElementById("editor").hidden=true;
+  document.getElementById("setup").hidden=false;
+};
+/* если что-то всё же сломается, пусть это будет видно в журнале, а не в пустом экране */
+window.addEventListener("error", e=>{
+  try{ say("Сбой в игре: "+e.message); }catch(_){}
+});
+</script>
+</body>
+</html>
