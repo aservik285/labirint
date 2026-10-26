@@ -226,6 +226,10 @@
         <input type="checkbox" id="netsurv" style="vertical-align:-2px"> 🌲 выживание вместо лабиринта</label>
       <span class="legend">общий бесконечный лес: у каждого своя поляна, но мир один</span>
     </div>
+    <div class="row" style="margin-bottom:4px">
+      <button id="netmap">📂 Играть на сохранённой карте</button>
+      <span id="netmapname" class="legend">поле соберётся случайно</span>
+    </div>
     <div class="row">
       <button class="main" id="nethost">Создать партию</button>
       <span style="color:var(--dim)">или</span>
@@ -963,7 +967,7 @@ function beastHome(kind,x,y,r){
 
 /* ===================== старт партии ===================== */
 function newGame(p){
-  params=p;
+  params=p; endless=false;
   let built=null;
   for(let tries=0; tries<80 && !built; tries++) built=generate(p);
   if(!built){ alert("Не удалось собрать поле. Попробуйте размер побольше."); return; }
@@ -3608,6 +3612,57 @@ function applyMap(txt){
   return true;
 }
 
+/* --- сохранённая карта для сетевой партии ---
+   Выбранная карта просто запоминается: поле соберётся из неё в момент старта,
+   когда уже известно, сколько игроков подключилось. */
+let netMap=null;
+
+function netMapName(){
+  const el=document.getElementById("netmapname");
+  if(el) el.innerHTML = netMap
+    ? "поле: <b style='color:var(--ink)'>"+netMap.name+"</b>"
+    : "поле соберётся случайно";
+}
+
+function netMapDialog(){
+  const store=mapStore();
+  const draw=()=>{
+    modal("Карта для сетевой партии",
+      `<p>Партия пойдёт на этой карте вместо случайного поля. Точки возрождения
+          для всех подключившихся игроков игра расставит сама, если их на карте не хватит.</p>` +
+      mapListHTML(store,"Крестик удаляет карту с полки насовсем.",
+                  "Сохранённых карт пока нет — соберите поле в редакторе и сохраните.") +
+      `<textarea id="maptext" style="${TA_STYLE}" placeholder="или вставьте текст карты"></textarea>`,
+      [{label:"Взять из текста", main:true, cb:()=>{
+          const txt=(document.getElementById("maptext").value||"").trim();
+          if(!txt) return;
+          netMap={name:"карта из текста", txt};
+          netMapName(); closeModal();
+        }},
+       {label:"Без карты, случайное поле", cb:()=>{ netMap=null; netMapName(); closeModal(); }}]);
+    wireMapList(store, n=>{
+      netMap={name:n, txt:store[n]};
+      document.getElementById("netsurv").checked=false;    // карта и лес — разные вещи
+      netMapName(); closeModal();
+    }, draw);
+  };
+  draw();
+}
+
+/* поднять партию на готовой карте: геометрия и звери из карты, число игроков — из настроек */
+function startMapGame(p){
+  let added;
+  try{ added=mapFromText(netMap.txt); }
+  catch(e){ alert("Не получилось прочитать карту: "+e.message); return false; }
+  endless=false;
+  params=Object.assign({}, params, {players:p.players, bots:p.bots});
+  edPlay();
+  if(added && added.length)
+    say("Карта приведена к новым правилам, добавлено: "+added.join(", ")+".");
+  say("Играем на сохранённой карте: "+netMap.name+".");
+  return true;
+}
+
 function loadMapDialog(){
   const store=mapStore();
   const draw=()=>{
@@ -3756,7 +3811,8 @@ function hostStart(){
   net.hostPlays=plays;
   p.bots=0;                                  // по сети играют люди
   document.getElementById("netcard").hidden=true;
-  if(document.getElementById("netsurv").checked) startSurvival(p);
+  if(netMap) startMapGame(p);
+  else if(document.getElementById("netsurv").checked) startSurvival(p);
   else newGame(p);
 }
 
@@ -3929,6 +3985,10 @@ document.getElementById("netopen").onclick = ()=>{
 document.getElementById("nethost").onclick = hostCreate;
 document.getElementById("netjoin").onclick = clientJoin;
 document.getElementById("netstart").onclick= hostStart;
+document.getElementById("netmap").onclick  = netMapDialog;
+document.getElementById("netsurv").onchange= ()=>{             // лес и карта несовместимы
+  if(document.getElementById("netsurv").checked){ netMap=null; netMapName(); }
+};
 document.getElementById("netplay").onchange= ()=>{ if(isHost()) drawSeats(); };
 document.getElementById("pl").addEventListener("input", ()=>{ if(isHost()) drawSeats(); });
 document.getElementById("toedit").onclick  = ()=>openEditor(readParams());
